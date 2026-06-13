@@ -1,145 +1,270 @@
-import { orders, orderStatus } from "../database/orders.data.js";
-import { products } from "../database/products.data.js";
+import { prisma } from "../config/prisma.js";
 
-const generateOrderNumber = () => {
-  const nextNumber = orders.length + 1;
+export const orderStatus = {
+  PENDING: "pendiente",
+  PAID: "pagado",
+  PREPARING: "preparando",
+  READY: "listo",
+  DELIVERED: "entregado",
+  CANCELLED: "cancelado"
+};
+
+const generateOrderNumber = async () => {
+  const totalOrders = await prisma.order.count();
+  const nextNumber = totalOrders + 1;
   return `KIO-${String(nextNumber).padStart(4, "0")}`;
 };
 
-export const createOrder = (req, res) => {
-  const { customerName, items, paymentMethod } = req.body;
+const formatOrder = (order) => {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    customerName: order.customerName,
+    items: order.items.map((item) => ({
+      productId: item.productId,
+      name: item.name,
+      category: item.category,
+      unitPrice: Number(item.unitPrice),
+      quantity: item.quantity,
+      subtotal: Number(item.subtotal)
+    })),
+    total: Number(order.total),
+    paymentMethod: order.paymentMethod,
+    status: order.status,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt
+  };
+};
 
-  if (!items || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({
+export const createOrder = async (req, res) => {
+  try {
+    const { customerName, items, paymentMethod } = req.body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        message: "El pedido debe tener al menos un producto"
+      });
+    }
+
+    const orderItems = [];
+    let total = 0;
+
+    for (const item of items) {
+      const productId = Number(item.productId);
+      const quantity = Number(item.quantity);
+
+      if (!quantity || quantity <= 0) {
+        return res.status(400).json({
+          ok: false,
+          message: "La cantidad debe ser mayor a 0"
+        });
+      }
+
+      const product = await prisma.product.findUnique({
+        where: {
+          id: productId
+        },
+        include: {
+          category: true
+        }
+      });
+
+      if (!product || !product.isActive) {
+        return res.status(404).json({
+          ok: false,
+          message: `Producto con ID ${item.productId} no encontrado`
+        });
+      }
+
+      if (product.stock < quantity) {
+        return res.status(400).json({
+          ok: false,
+          message: `Stock insuficiente para ${product.name}`
+        });
+      }
+
+      const unitPrice = Number(product.price);
+      const subtotal = unitPrice * quantity;
+
+      orderItems.push({
+        productId: product.id,
+        name: product.name,
+        category: product.category.name,
+        unitPrice,
+        quantity,
+        subtotal
+      });
+
+      total += subtotal;
+    }
+
+    const orderNumber = await generateOrderNumber();
+
+    const newOrder = await prisma.$transaction(async (tx) => {
+      for (const item of orderItems) {
+        await tx.product.update({
+          where: {
+            id: item.productId
+          },
+          data: {
+            stock: {
+              decrement: item.quantity
+            }
+          }
+        });
+      }
+
+      return tx.order.create({
+        data: {
+          orderNumber,
+          customerName: customerName || "Cliente kiosko",
+          total: Number(total.toFixed(2)),
+          paymentMethod: paymentMethod || "pendiente",
+          status: orderStatus.PENDING,
+          items: {
+            create: orderItems.map((item) => ({
+              productId: item.productId,
+              name: item.name,
+              category: item.category,
+              unitPrice: item.unitPrice,
+              quantity: item.quantity,
+              subtotal: Number(item.subtotal.toFixed(2))
+            }))
+          }
+        },
+        include: {
+          items: true
+        }
+      });
+    });
+
+    res.status(201).json({
+      ok: true,
+      message: "Pedido creado correctamente",
+      order: formatOrder(newOrder)
+    });
+  } catch (error) {
+    console.error("Error creando pedido:", error);
+
+    res.status(500).json({
       ok: false,
-      message: "El pedido debe tener al menos un producto"
+      message: "Error interno al crear pedido"
     });
   }
+};
 
-  const orderItems = [];
-  let total = 0;
+export const getOrders = async (req, res) => {
+  try {
+    const orders = await prisma.order.findMany({
+      include: {
+        items: true
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    });
 
-  for (const item of items) {
-    const product = products.find((productItem) => productItem.id === Number(item.productId));
+    res.json({
+      ok: true,
+      total: orders.length,
+      orders: orders.map(formatOrder)
+    });
+  } catch (error) {
+    console.error("Error obteniendo pedidos:", error);
 
-    if (!product) {
+    res.status(500).json({
+      ok: false,
+      message: "Error interno al obtener pedidos"
+    });
+  }
+};
+
+export const getOrderById = async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+
+    const order = await prisma.order.findUnique({
+      where: {
+        id: orderId
+      },
+      include: {
+        items: true
+      }
+    });
+
+    if (!order) {
       return res.status(404).json({
         ok: false,
-        message: `Producto con ID ${item.productId} no encontrado`
+        message: "Pedido no encontrado"
       });
     }
 
-    const quantity = Number(item.quantity);
+    res.json({
+      ok: true,
+      order: formatOrder(order)
+    });
+  } catch (error) {
+    console.error("Error obteniendo pedido:", error);
 
-    if (!quantity || quantity <= 0) {
+    res.status(500).json({
+      ok: false,
+      message: "Error interno al obtener pedido"
+    });
+  }
+};
+
+export const updateOrderStatus = async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+    const { status } = req.body;
+
+    const allowedStatus = Object.values(orderStatus);
+
+    if (!allowedStatus.includes(status)) {
       return res.status(400).json({
         ok: false,
-        message: "La cantidad debe ser mayor a 0"
+        message: "Estado de pedido no válido",
+        allowedStatus
       });
     }
 
-    if (product.stock < quantity) {
-      return res.status(400).json({
+    const existingOrder = await prisma.order.findUnique({
+      where: {
+        id: orderId
+      }
+    });
+
+    if (!existingOrder) {
+      return res.status(404).json({
         ok: false,
-        message: `Stock insuficiente para ${product.name}`
+        message: "Pedido no encontrado"
       });
     }
 
-    const subtotal = product.price * quantity;
-
-    orderItems.push({
-      productId: product.id,
-      name: product.name,
-      category: product.category,
-      unitPrice: product.price,
-      quantity,
-      subtotal
+    const updatedOrder = await prisma.order.update({
+      where: {
+        id: orderId
+      },
+      data: {
+        status
+      },
+      include: {
+        items: true
+      }
     });
 
-    total += subtotal;
-  }
+    res.json({
+      ok: true,
+      message: "Estado del pedido actualizado correctamente",
+      order: formatOrder(updatedOrder)
+    });
+  } catch (error) {
+    console.error("Error actualizando pedido:", error);
 
-  for (const item of orderItems) {
-    const product = products.find((productItem) => productItem.id === item.productId);
-    product.stock -= item.quantity;
-  }
-
-  const newOrder = {
-    id: orders.length + 1,
-    orderNumber: generateOrderNumber(),
-    customerName: customerName || "Cliente kiosko",
-    items: orderItems,
-    total: Number(total.toFixed(2)),
-    paymentMethod: paymentMethod || "pendiente",
-    status: orderStatus.PENDING,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-
-  orders.push(newOrder);
-
-  res.status(201).json({
-    ok: true,
-    message: "Pedido creado correctamente",
-    order: newOrder
-  });
-};
-
-export const getOrders = (req, res) => {
-  res.json({
-    ok: true,
-    total: orders.length,
-    orders
-  });
-};
-
-export const getOrderById = (req, res) => {
-  const orderId = Number(req.params.id);
-
-  const order = orders.find((orderItem) => orderItem.id === orderId);
-
-  if (!order) {
-    return res.status(404).json({
+    res.status(500).json({
       ok: false,
-      message: "Pedido no encontrado"
+      message: "Error interno al actualizar pedido"
     });
   }
-
-  res.json({
-    ok: true,
-    order
-  });
-};
-
-export const updateOrderStatus = (req, res) => {
-  const orderId = Number(req.params.id);
-  const { status } = req.body;
-
-  const allowedStatus = Object.values(orderStatus);
-
-  if (!allowedStatus.includes(status)) {
-    return res.status(400).json({
-      ok: false,
-      message: "Estado de pedido no válido",
-      allowedStatus
-    });
-  }
-
-  const order = orders.find((orderItem) => orderItem.id === orderId);
-
-  if (!order) {
-    return res.status(404).json({
-      ok: false,
-      message: "Pedido no encontrado"
-    });
-  }
-
-  order.status = status;
-  order.updatedAt = new Date().toISOString();
-
-  res.json({
-    ok: true,
-    message: "Estado del pedido actualizado correctamente",
-    order
-  });
 };

@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: kiosko_cafeteria_usil_db
+    restart: always
+    environment:
+      POSTGRES_USER: kiosko_user
+      POSTGRES_PASSWORD: kiosko_password
+      POSTGRES_DB: kiosko_cafeteria_usil
+    ports:
+      - "5432:5432"
+    volumes:
+      - kiosko_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  kiosko_postgres_data:

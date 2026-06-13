@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("categories")
+}
+
+model Product {
+  id          Int         @id @default(autoincrement())
+  name        String
+  description String
+  price       Decimal     @db.Decimal(10, 2)
+  stock       Int         @default(0)
+  image       String?
+  isActive    Boolean     @default(true)
+  categoryId  Int
+  category    Category    @relation(fields: [categoryId], references: [id])
+  orderItems  OrderItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("products")
+}
+
+model Order {
+  id            Int         @id @default(autoincrement())
+  orderNumber   String      @unique
+  customerName  String      @default("Cliente kiosko")
+  total         Decimal     @db.Decimal(10, 2)
+  paymentMethod String      @default("pendiente")
+  status        String      @default("pendiente")
+  items         OrderItem[]
+  payment       Payment?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  name      String
+  category  String
+  unitPrice Decimal  @db.Decimal(10, 2)
+  quantity  Int
+  subtotal  Decimal  @db.Decimal(10, 2)
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@map("order_items")
+}
+
+model Payment {
+  id            Int      @id @default(autoincrement())
+  transactionId String   @unique
+  orderId       Int      @unique
+  orderNumber   String
+  paymentMethod String
+  amount        Decimal  @db.Decimal(10, 2)
+  status        String   @default("aprobado")
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+
+  @@map("payments")
+}
