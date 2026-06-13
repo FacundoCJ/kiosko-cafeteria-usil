@@ -1,0 +1,27 @@
+{
+  "name": "kiosko-cafeteria-usil-backend",
+  "version": "1.0.0",
+  "description": "Backend API para el prototipo funcional del Sistema de Kiosko Táctil para Autoservicio - Cafetería USIL",
+  "main": "src/app.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/app.js",
+    "start": "node src/app.js"
+  },
+  "keywords": [
+    "kiosko",
+    "cafeteria",
+    "usil",
+    "node",
+    "express",
+    "api"
+  ],
+  "author": "Grupo 01 - Gestión de Proyectos para Computación",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.2",
+    "nodemon": "^3.1.14"
+  }
+}
