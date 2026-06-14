@@ -8,6 +8,7 @@ import Unauthorized from "./pages/Unauthorized.jsx";
 import OrderDisplay from "./pages/OrderDisplay.jsx";
 import ProductManagement from "./pages/ProductManagement.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
+import OrderManagement from "./pages/OrderManagement.jsx";
 
 import cafeAmericanoImg from "./assets/productos/cafe-americano.png";
 import capuccinoImg from "./assets/productos/capuccino.png";
@@ -158,12 +159,12 @@ function Root() {
   }
 
   if (currentPath.startsWith("/admin/pedidos")) {
-    return protectRoute(AdminPanel, ["ADMIN", "CAFETERIA", "COCINA"]);
-  }
+  return protectRoute(OrderManagement, ["ADMIN", "CAFETERIA", "COCINA"]);
+}
 
   if (currentPath === "/admin" || currentPath === "/admin/") {
-    return protectRoute(AdminPanel, ["ADMIN"]);
-  }
+  return protectRoute(OrderManagement, ["ADMIN"]);
+}
 
   return <KioskApp />;
 }
