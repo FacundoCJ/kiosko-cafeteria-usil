@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import Ticket from "./pages/Ticket.jsx";
 
 import Login from "./pages/Login.jsx";
 import Reports from "./pages/Reports.jsx";
@@ -60,6 +61,10 @@ function Root() {
     return <Component />;
   };
 
+if (currentPath.startsWith("/ticket/")) {
+  return <Ticket />;
+}
+  
   if (currentPath.startsWith("/pantalla-pedidos")) {
     return <OrderDisplay />;
   }
@@ -299,9 +304,20 @@ function KioskApp() {
             </div>
           )}
 
-          <button style={kioskStyles.startButton} onClick={clearOrder}>
-            Realizar otro pedido
-          </button>
+          <div style={kioskStyles.confirmationActions}>
+  {createdOrder && (
+    <a
+      href={`/ticket/${createdOrder.orderNumber}`}
+      style={kioskStyles.ticketButton}
+    >
+      Ver comprobante
+    </a>
+  )}
+
+  <button style={kioskStyles.startButton} onClick={clearOrder}>
+    Realizar otro pedido
+  </button>
+</div>
         </section>
       </main>
     );
@@ -763,6 +779,21 @@ const kioskStyles = {
     padding: "18px",
     fontWeight: "800"
   },
+  confirmationActions: {
+  display: "grid",
+  gap: "14px"
+},
+ticketButton: {
+  background: COLORS.success,
+  color: COLORS.white,
+  border: "none",
+  borderRadius: "999px",
+  padding: "18px 36px",
+  fontSize: "20px",
+  fontWeight: "900",
+  cursor: "pointer",
+  textDecoration: "none"
+},
   startButton: {
     background: COLORS.primary,
     color: COLORS.white,

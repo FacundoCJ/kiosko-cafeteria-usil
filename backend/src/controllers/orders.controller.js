@@ -47,6 +47,26 @@ const formatPublicOrder = (order) => {
   };
 };
 
+const formatTicketOrder = (order) => {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    customerName: order.customerName,
+    items: order.items.map((item) => ({
+      name: item.name,
+      category: item.category,
+      unitPrice: Number(item.unitPrice),
+      quantity: item.quantity,
+      subtotal: Number(item.subtotal)
+    })),
+    total: Number(order.total),
+    paymentMethod: order.paymentMethod,
+    status: order.status,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt
+  };
+};
+
 export const createOrder = async (req, res) => {
   try {
     const { customerName, items, paymentMethod } = req.body;
@@ -313,6 +333,47 @@ export const getPublicOrderStatus = async (req, res) => {
     res.status(500).json({
       ok: false,
       message: "Error interno al obtener estado público de pedidos"
+    });
+  }
+};
+
+export const getPublicTicketByOrderNumber = async (req, res) => {
+  try {
+    const { orderNumber } = req.params;
+
+    if (!orderNumber) {
+      return res.status(400).json({
+        ok: false,
+        message: "El número de pedido es obligatorio"
+      });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: {
+        orderNumber: orderNumber.trim().toUpperCase()
+      },
+      include: {
+        items: true
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        ok: false,
+        message: "No se encontró un pedido con ese número"
+      });
+    }
+
+    res.json({
+      ok: true,
+      ticket: formatTicketOrder(order)
+    });
+  } catch (error) {
+    console.error("Error obteniendo ticket público:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Error interno al obtener ticket"
     });
   }
 };

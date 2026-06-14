@@ -4,6 +4,7 @@ import {
   getOrderById,
   getOrders,
   getPublicOrderStatus,
+  getPublicTicketByOrderNumber,
   updateOrderStatus
 } from "../controllers/orders.controller.js";
 import {
@@ -16,6 +17,7 @@ const router = Router();
 router.post("/", createOrder);
 
 router.get("/public/status", getPublicOrderStatus);
+router.get("/public/ticket/:orderNumber", getPublicTicketByOrderNumber);
 
 router.get(
   "/",
