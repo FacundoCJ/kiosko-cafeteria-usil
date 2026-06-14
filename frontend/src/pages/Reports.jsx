@@ -124,26 +124,30 @@ export default function Reports() {
         </div>
 
         <div style={styles.headerActions}>
-          <a href="/admin" style={styles.secondaryButton}>
-            Panel pedidos
-          </a>
+  <a href="/admin" style={styles.secondaryButton}>
+    Panel pedidos
+  </a>
 
-          <a href="/admin/productos" style={styles.secondaryButton}>
-            Productos
-          </a>
+  <a href="/admin/usuarios" style={styles.secondaryButton}>
+    Usuarios
+  </a>
 
-          <a href="/" style={styles.secondaryButton}>
-            Ir al kiosko
-          </a>
+  <a href="/admin/productos" style={styles.secondaryButton}>
+    Productos
+  </a>
 
-          <button style={styles.primaryButton} onClick={loadReports}>
-            {loading ? "Cargando..." : "Actualizar"}
-          </button>
+  <a href="/" style={styles.secondaryButton}>
+    Ir al kiosko
+  </a>
 
-          <button style={styles.logoutButton} onClick={logout}>
-            Cerrar sesión
-          </button>
-        </div>
+  <button style={styles.primaryButton} onClick={loadReports}>
+    {loading ? "Cargando..." : "Actualizar"}
+  </button>
+
+  <button style={styles.logoutButton} onClick={logout}>
+    Cerrar sesión
+  </button>
+</div>
       </header>
 
       <section style={styles.filtersCard}>

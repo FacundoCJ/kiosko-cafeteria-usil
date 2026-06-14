@@ -7,6 +7,7 @@ import productsRoutes from "./routes/products.routes.js";
 import ordersRoutes from "./routes/orders.routes.js";
 import paymentsRoutes from "./routes/payments.routes.js";
 import reportsRoutes from "./routes/reports.routes.js";
+import usersRoutes from "./routes/users.routes.js";
 
 dotenv.config();
 
@@ -41,6 +42,7 @@ app.use("/api/products", productsRoutes);
 app.use("/api/orders", ordersRoutes);
 app.use("/api/payments", paymentsRoutes);
 app.use("/api/reports", reportsRoutes);
+app.use("/api/users", usersRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
@@ -69,5 +71,6 @@ app.listen(PORT, () => {
   console.log(`Pedidos: http://localhost:${PORT}/api/orders`);
   console.log(`Pagos: http://localhost:${PORT}/api/payments`);
   console.log(`Reportes: http://localhost:${PORT}/api/reports/summary`);
+  console.log(`Usuarios: http://localhost:${PORT}/api/users`);
   console.log("=====================================");
 });

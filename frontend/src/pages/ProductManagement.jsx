@@ -300,6 +300,10 @@ export default function ProductManagement() {
     Panel pedidos
   </a>
 
+  <a href="/admin/usuarios" style={styles.secondaryButton}>
+    Usuarios
+  </a>
+
   <a href="/admin/reportes" style={styles.secondaryButton}>
     Reportes
   </a>

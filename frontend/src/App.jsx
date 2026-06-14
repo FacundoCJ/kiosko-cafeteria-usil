@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Reports from "./pages/Reports.jsx";
 import { createRoot } from "react-dom/client";
 import ProductManagement from "./pages/ProductManagement.jsx";
+import UserManagement from "./pages/UserManagement.jsx";
 import Login from "./pages/Login.jsx";
 import {
   getAuthHeaders,
@@ -35,6 +36,15 @@ function Root() {
     }
 
     return <Login />;
+  }
+
+  if (currentPath.startsWith("/admin/usuarios")) {
+    if (!isAuthenticated()) {
+      window.location.href = "/login";
+      return null;
+    }
+
+    return <UserManagement />;
   }
 
   if (currentPath.startsWith("/admin/reportes")) {
@@ -485,6 +495,10 @@ function AdminPanel() {
         </div>
 
         <div style={adminStyles.headerActions}>
+  <a href="/admin/usuarios" style={adminStyles.linkButton}>
+    Usuarios
+  </a>
+
   <a href="/admin/reportes" style={adminStyles.linkButton}>
     Reportes
   </a>
