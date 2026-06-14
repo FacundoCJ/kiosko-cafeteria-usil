@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-import Reports from "./pages/Reports.jsx";
 import { createRoot } from "react-dom/client";
+
+import Login from "./pages/Login.jsx";
+import Reports from "./pages/Reports.jsx";
 import Unauthorized from "./pages/Unauthorized.jsx";
-import { getCurrentUser } from "./services/auth.service.js";
+import OrderDisplay from "./pages/OrderDisplay.jsx";
 import ProductManagement from "./pages/ProductManagement.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
-import Login from "./pages/Login.jsx";
+
 import {
   getAuthHeaders,
+  getCurrentUser,
   isAuthenticated,
   logout
 } from "./services/auth.service.js";
@@ -44,6 +47,10 @@ function Root() {
 
     return <Component />;
   };
+
+  if (currentPath.startsWith("/pantalla-pedidos")) {
+    return <OrderDisplay />;
+  }
 
   if (currentPath.startsWith("/login")) {
     if (isAuthenticated()) {
@@ -227,7 +234,9 @@ function KioskApp() {
       <main style={kioskStyles.page}>
         <section style={kioskStyles.welcomeCard}>
           <div style={kioskStyles.logo}>USIL</div>
+
           <h1 style={kioskStyles.welcomeTitle}>Kiosko Cafetería USIL</h1>
+
           <p style={kioskStyles.welcomeSubtitle}>
             Realiza tu pedido de forma rápida, segura y autónoma.
           </p>
@@ -239,11 +248,12 @@ function KioskApp() {
             <div style={kioskStyles.step}>4. Retira tu pedido</div>
           </div>
 
-          <button style={kioskStyles.startButton} onClick={() => setScreen("menu")}>
+          <button
+            style={kioskStyles.startButton}
+            onClick={() => setScreen("menu")}
+          >
             Iniciar pedido
           </button>
-
-          
         </section>
       </main>
     );
@@ -254,7 +264,9 @@ function KioskApp() {
       <main style={kioskStyles.page}>
         <section style={kioskStyles.confirmationCard}>
           <div style={kioskStyles.successIcon}>✓</div>
+
           <h1 style={kioskStyles.welcomeTitle}>Pedido confirmado</h1>
+
           <p style={kioskStyles.welcomeSubtitle}>
             Tu pedido fue registrado y enviado a cafetería.
           </p>
@@ -262,7 +274,9 @@ function KioskApp() {
           {createdOrder && (
             <div style={kioskStyles.ticketBox}>
               <strong>Número de pedido</strong>
-              <span style={kioskStyles.orderNumber}>{createdOrder.orderNumber}</span>
+              <span style={kioskStyles.orderNumber}>
+                {createdOrder.orderNumber}
+              </span>
               <span>Total: S/ {createdOrder.total.toFixed(2)}</span>
               <span>Pago: {createdOrder.paymentMethod}</span>
               <span>Estado: {createdOrder.status}</span>
@@ -282,7 +296,9 @@ function KioskApp() {
       <header style={kioskStyles.header}>
         <div>
           <div style={kioskStyles.logoSmall}>USIL</div>
+
           <h1 style={kioskStyles.menuTitle}>Catálogo de cafetería</h1>
+
           <p style={kioskStyles.menuSubtitle}>
             Selecciona tus productos y confirma tu pedido.
           </p>
@@ -309,6 +325,7 @@ function KioskApp() {
                       </div>
 
                       <h3 style={kioskStyles.productName}>{product.name}</h3>
+
                       <p style={kioskStyles.productDescription}>
                         {product.description}
                       </p>
@@ -343,6 +360,7 @@ function KioskApp() {
                 <div key={item.id} style={kioskStyles.cartItem}>
                   <div>
                     <strong>{item.name}</strong>
+
                     <span style={kioskStyles.cartDetail}>
                       S/ {item.price.toFixed(2)} x {item.quantity}
                     </span>
@@ -409,12 +427,12 @@ function AdminPanel() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-const currentUser = getCurrentUser();
+  const currentUser = getCurrentUser();
 
-const canManageUsers = currentUser?.role === "ADMIN";
-const canManageProducts = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
-const canViewReports = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
-const canDeliverOrders = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
+  const canManageUsers = currentUser?.role === "ADMIN";
+  const canManageProducts = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
+  const canViewReports = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
+  const canDeliverOrders = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
 
   const loadOrders = async () => {
     try {
@@ -485,43 +503,49 @@ const canDeliverOrders = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
       <header style={adminStyles.header}>
         <div>
           <div style={adminStyles.logo}>USIL</div>
+
           <h1 style={adminStyles.title}>Panel de cafetería</h1>
+
           <p style={adminStyles.subtitle}>
             Gestiona pedidos, preparación y entrega.
           </p>
         </div>
 
         <div style={adminStyles.headerActions}>
-  {canManageUsers && (
-    <a href="/admin/usuarios" style={adminStyles.linkButton}>
-      Usuarios
-    </a>
-  )}
+          {canManageUsers && (
+            <a href="/admin/usuarios" style={adminStyles.linkButton}>
+              Usuarios
+            </a>
+          )}
 
-  {canViewReports && (
-    <a href="/admin/reportes" style={adminStyles.linkButton}>
-      Reportes
-    </a>
-  )}
+          {canViewReports && (
+            <a href="/admin/reportes" style={adminStyles.linkButton}>
+              Reportes
+            </a>
+          )}
 
-  {canManageProducts && (
-    <a href="/admin/productos" style={adminStyles.linkButton}>
-      Gestionar productos
-    </a>
-  )}
+          {canManageProducts && (
+            <a href="/admin/productos" style={adminStyles.linkButton}>
+              Gestionar productos
+            </a>
+          )}
 
-  <a href="/" style={adminStyles.linkButton}>
-    Ir al kiosko
-  </a>
+          <a href="/pantalla-pedidos" style={adminStyles.linkButton}>
+            Pantalla retiro
+          </a>
 
-  <button style={adminStyles.refreshButton} onClick={loadOrders}>
-    {loading ? "Cargando..." : "Actualizar"}
-  </button>
+          <a href="/" style={adminStyles.linkButton}>
+            Ir al kiosko
+          </a>
 
-  <button style={adminStyles.logoutButton} onClick={logout}>
-    Cerrar sesión
-  </button>
-</div>
+          <button style={adminStyles.refreshButton} onClick={loadOrders}>
+            {loading ? "Cargando..." : "Actualizar"}
+          </button>
+
+          <button style={adminStyles.logoutButton} onClick={logout}>
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
       <section style={adminStyles.metrics}>
@@ -564,15 +588,15 @@ const canDeliverOrders = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
         />
 
         <OrderColumn
-  title="Listos"
-  orders={readyOrders}
-  actionLabel={canDeliverOrders ? "Entregar" : "Esperando entrega"}
-  onAction={
-    canDeliverOrders
-      ? (orderId) => updateOrderStatus(orderId, "entregado")
-      : null
-  }
-/>
+          title="Listos"
+          orders={readyOrders}
+          actionLabel={canDeliverOrders ? "Entregar" : "Esperando entrega"}
+          onAction={
+            canDeliverOrders
+              ? (orderId) => updateOrderStatus(orderId, "entregado")
+              : null
+          }
+        />
 
         <OrderColumn
           title="Entregados"
@@ -733,13 +757,6 @@ const kioskStyles = {
     fontWeight: "900",
     cursor: "pointer"
   },
-  adminLink: {
-    display: "block",
-    marginTop: "18px",
-    color: COLORS.primary,
-    fontWeight: "800",
-    textDecoration: "none"
-  },
   menuPage: {
     minHeight: "100vh",
     background: COLORS.background,
@@ -767,15 +784,6 @@ const kioskStyles = {
     margin: "8px 0 0",
     color: COLORS.textSoft,
     fontSize: "18px"
-  },
-  adminButton: {
-    textDecoration: "none",
-    background: COLORS.primaryLight,
-    color: COLORS.primary,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: "999px",
-    padding: "14px 24px",
-    fontWeight: "800"
   },
   message: {
     background: COLORS.primaryLight,

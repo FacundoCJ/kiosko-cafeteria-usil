@@ -36,6 +36,17 @@ const formatOrder = (order) => {
   };
 };
 
+const formatPublicOrder = (order) => {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    total: Number(order.total),
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt
+  };
+};
+
 export const createOrder = async (req, res) => {
   try {
     const { customerName, items, paymentMethod } = req.body;
@@ -265,6 +276,43 @@ export const updateOrderStatus = async (req, res) => {
     res.status(500).json({
       ok: false,
       message: "Error interno al actualizar pedido"
+    });
+  }
+};
+
+export const getPublicOrderStatus = async (req, res) => {
+  try {
+    const orders = await prisma.order.findMany({
+      where: {
+        status: {
+          in: [orderStatus.PAID, orderStatus.PREPARING, orderStatus.READY]
+        }
+      },
+      orderBy: {
+        updatedAt: "desc"
+      },
+      take: 30
+    });
+
+    const preparingOrders = orders.filter((order) =>
+      [orderStatus.PAID, orderStatus.PREPARING].includes(order.status)
+    );
+
+    const readyOrders = orders.filter((order) => order.status === orderStatus.READY);
+
+    res.json({
+      ok: true,
+      preparing: preparingOrders.map(formatPublicOrder),
+      ready: readyOrders.map(formatPublicOrder),
+      totalPreparing: preparingOrders.length,
+      totalReady: readyOrders.length
+    });
+  } catch (error) {
+    console.error("Error obteniendo estado público de pedidos:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Error interno al obtener estado público de pedidos"
     });
   }
 };

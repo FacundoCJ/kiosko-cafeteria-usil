@@ -1,8 +1,9 @@
 import { Router } from "express";
 import {
   createOrder,
-  getOrders,
   getOrderById,
+  getOrders,
+  getPublicOrderStatus,
   updateOrderStatus
 } from "../controllers/orders.controller.js";
 import {
@@ -13,6 +14,8 @@ import {
 const router = Router();
 
 router.post("/", createOrder);
+
+router.get("/public/status", getPublicOrderStatus);
 
 router.get(
   "/",
