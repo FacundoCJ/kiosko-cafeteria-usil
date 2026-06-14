@@ -12,8 +12,7 @@ const COLORS = {
   text: "#162033",
   textSoft: "#5B6780",
   border: "#D7E1F2",
-  danger: "#D72638",
-  success: "#1F9D55"
+  danger: "#D72638"
 };
 
 export default function Login() {
@@ -61,6 +60,7 @@ export default function Login() {
       <section style={styles.card}>
         <div style={styles.brandBox}>
           <div style={styles.logo}>USIL</div>
+
           <div>
             <h1 style={styles.title}>Acceso administrativo</h1>
             <p style={styles.subtitle}>

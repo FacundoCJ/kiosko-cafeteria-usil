@@ -10,6 +10,21 @@ export const getToken = () => {
   return localStorage.getItem(TOKEN_KEY);
 };
 
+export const getAuthHeaders = () => {
+  const token = getToken();
+
+  if (!token) {
+    return {
+      "Content-Type": "application/json"
+    };
+  }
+
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`
+  };
+};
+
 export const getCurrentUser = () => {
   const storedUser = localStorage.getItem(USER_KEY);
 

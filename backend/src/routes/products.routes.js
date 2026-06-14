@@ -9,19 +9,56 @@ import {
   updateProduct,
   updateProductStock
 } from "../controllers/products.controller.js";
+import {
+  authenticate,
+  authorizeRoles
+} from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
 router.get("/", getProducts);
-router.get("/categories", getCategories);
 router.get("/:id", getProductById);
 
-router.post("/", createProduct);
+router.get(
+  "/admin/categories",
+  authenticate,
+  authorizeRoles("ADMIN", "CAFETERIA"),
+  getCategories
+);
 
-router.put("/:id", updateProduct);
-router.patch("/:id/stock", updateProductStock);
-router.patch("/:id/toggle-status", toggleProductStatus);
+router.post(
+  "/",
+  authenticate,
+  authorizeRoles("ADMIN", "CAFETERIA"),
+  createProduct
+);
 
-router.delete("/:id", deleteProduct);
+router.put(
+  "/:id",
+  authenticate,
+  authorizeRoles("ADMIN", "CAFETERIA"),
+  updateProduct
+);
+
+router.patch(
+  "/:id/stock",
+  authenticate,
+  authorizeRoles("ADMIN", "CAFETERIA"),
+  updateProductStock
+);
+
+router.patch(
+  "/:id/toggle-status",
+  authenticate,
+  authorizeRoles("ADMIN", "CAFETERIA"),
+  toggleProductStatus
+);
+
+router.delete(
+  "/:id",
+  authenticate,
+  authorizeRoles("ADMIN"),
+  deleteProduct
+);
 
 export default router;

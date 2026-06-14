@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { logout } from "../services/auth.service.js";
+import { getAuthHeaders, logout } from "../services/auth.service.js";
 
 const API_URL = "/api";
 
@@ -13,8 +13,7 @@ const COLORS = {
   textSoft: "#5B6780",
   border: "#D7E1F2",
   success: "#1F9D55",
-  danger: "#D72638",
-  warning: "#F4B400"
+  danger: "#D72638"
 };
 
 const emptyForm = {
@@ -61,7 +60,10 @@ export default function ProductManagement() {
 
   const loadCategories = async () => {
     try {
-      const response = await fetch(`${API_URL}/products/categories`);
+      const response = await fetch(`${API_URL}/products/admin/categories`, {
+        headers: getAuthHeaders()
+      });
+
       const data = await response.json();
 
       if (!response.ok) {
@@ -165,9 +167,7 @@ export default function ProductManagement() {
 
       const response = await fetch(url, {
         method,
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
 
@@ -200,7 +200,8 @@ export default function ProductManagement() {
       setMessage("");
 
       const response = await fetch(`${API_URL}/products/${productId}/toggle-status`, {
-        method: "PATCH"
+        method: "PATCH",
+        headers: getAuthHeaders()
       });
 
       const data = await response.json();
@@ -231,7 +232,8 @@ export default function ProductManagement() {
       setMessage("");
 
       const response = await fetch(`${API_URL}/products/${productId}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: getAuthHeaders()
       });
 
       const data = await response.json();
@@ -260,9 +262,7 @@ export default function ProductManagement() {
 
       const response = await fetch(`${API_URL}/products/${product.id}/stock`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           stock: newStock
         })
@@ -295,23 +295,23 @@ export default function ProductManagement() {
           </p>
         </div>
 
-       <div style={styles.headerActions}>
-  <a href="/admin" style={styles.secondaryButton}>
-    Panel pedidos
-  </a>
+        <div style={styles.headerActions}>
+          <a href="/admin" style={styles.secondaryButton}>
+            Panel pedidos
+          </a>
 
-  <a href="/" style={styles.secondaryButton}>
-    Ir al kiosko
-  </a>
+          <a href="/" style={styles.secondaryButton}>
+            Ir al kiosko
+          </a>
 
-  <button style={styles.primaryButton} onClick={loadProducts}>
-    {loading ? "Cargando..." : "Actualizar"}
-  </button>
+          <button style={styles.primaryButton} onClick={loadProducts}>
+            {loading ? "Cargando..." : "Actualizar"}
+          </button>
 
-  <button style={styles.logoutButton} onClick={logout}>
-    Cerrar sesión
-  </button>
-</div>
+          <button style={styles.logoutButton} onClick={logout}>
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
       <section style={styles.metrics}>
@@ -631,16 +631,6 @@ function getProductEmoji(image) {
 }
 
 const styles = {
-    logoutButton: {
-  background: COLORS.danger,
-  color: COLORS.white,
-  border: "none",
-  borderRadius: "999px",
-  padding: "14px 24px",
-  fontWeight: "800",
-  fontSize: "16px",
-  cursor: "pointer"
-},
   page: {
     minHeight: "100vh",
     background: COLORS.background,
@@ -685,7 +675,9 @@ const styles = {
   headerActions: {
     display: "flex",
     gap: "14px",
-    alignItems: "center"
+    alignItems: "center",
+    flexWrap: "wrap",
+    justifyContent: "flex-end"
   },
   primaryButton: {
     background: COLORS.primary,
@@ -706,6 +698,16 @@ const styles = {
     padding: "14px 24px",
     fontWeight: "800",
     fontSize: "16px"
+  },
+  logoutButton: {
+    background: COLORS.danger,
+    color: COLORS.white,
+    border: "none",
+    borderRadius: "999px",
+    padding: "14px 24px",
+    fontWeight: "800",
+    fontSize: "16px",
+    cursor: "pointer"
   },
   metrics: {
     display: "grid",
