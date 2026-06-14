@@ -753,6 +753,12 @@ function OrderManagement() {
             </a>
           )}
 
+{canManageProducts && (
+  <a href="/admin/stock" style={styles.linkButton}>
+    Stock
+  </a>
+)}
+
           <a href="/pantalla-pedidos" style={styles.linkButton}>
             Pantalla retiro
           </a>

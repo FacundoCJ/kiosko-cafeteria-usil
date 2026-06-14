@@ -9,6 +9,7 @@ import OrderDisplay from "./pages/OrderDisplay.jsx";
 import ProductManagement from "./pages/ProductManagement.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
 import OrderManagement from "./pages/OrderManagement.jsx";
+import StockManagement from "./pages/StockManagement.jsx";
 
 import cafeAmericanoImg from "./assets/productos/cafe-americano.png";
 import capuccinoImg from "./assets/productos/capuccino.png";
@@ -157,6 +158,10 @@ function Root() {
   if (currentPath.startsWith("/admin/productos")) {
     return protectRoute(ProductManagement, ["ADMIN", "CAFETERIA"]);
   }
+
+if (currentPath.startsWith("/admin/stock")) {
+  return protectRoute(StockManagement, ["ADMIN", "CAFETERIA"]);
+}
 
   if (currentPath.startsWith("/admin/pedidos")) {
   return protectRoute(OrderManagement, ["ADMIN", "CAFETERIA", "COCINA"]);
