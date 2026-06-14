@@ -1,13 +1,23 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import Ticket from "./pages/Ticket.jsx";
 
+import Ticket from "./pages/Ticket.jsx";
 import Login from "./pages/Login.jsx";
 import Reports from "./pages/Reports.jsx";
 import Unauthorized from "./pages/Unauthorized.jsx";
 import OrderDisplay from "./pages/OrderDisplay.jsx";
 import ProductManagement from "./pages/ProductManagement.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
+
+import cafeAmericanoImg from "./assets/productos/cafe-americano.png";
+import capuccinoImg from "./assets/productos/capuccino.png";
+import jugoNaranjaImg from "./assets/productos/jugo-naranja.png";
+import panPolloImg from "./assets/productos/pan-pollo.png";
+import empanadaCarneImg from "./assets/productos/empanada-carne.png";
+import menuEjecutivoImg from "./assets/productos/menu-ejecutivo.png";
+import brownieImg from "./assets/productos/brownie.png";
+import aguaMineralImg from "./assets/productos/agua-mineral.png";
+import triplePolloImg from "./assets/productos/triple-pollo.png";
 
 import {
   getAuthHeaders,
@@ -30,6 +40,27 @@ const COLORS = {
   success: "#1F9D55",
   danger: "#D72638",
   warning: "#F4B400"
+};
+
+const PRODUCT_IMAGES = {
+  coffee: cafeAmericanoImg,
+  cafe: cafeAmericanoImg,
+  "cafe-americano": cafeAmericanoImg,
+  cappuccino: capuccinoImg,
+  capuccino: capuccinoImg,
+  juice: jugoNaranjaImg,
+  "jugo-naranja": jugoNaranjaImg,
+  sandwich: panPolloImg,
+  "pan-pollo": panPolloImg,
+  empanada: empanadaCarneImg,
+  "empanada-carne": empanadaCarneImg,
+  menu: menuEjecutivoImg,
+  "menu-ejecutivo": menuEjecutivoImg,
+  brownie: brownieImg,
+  water: aguaMineralImg,
+  "agua-mineral": aguaMineralImg,
+  food: triplePolloImg,
+  "triple-pollo": triplePolloImg
 };
 
 function Root() {
@@ -61,10 +92,10 @@ function Root() {
     return <Component />;
   };
 
-if (currentPath.startsWith("/ticket/")) {
-  return <Ticket />;
-}
-  
+  if (currentPath.startsWith("/ticket/")) {
+    return <Ticket />;
+  }
+
   if (currentPath.startsWith("/pantalla-pedidos")) {
     return <OrderDisplay />;
   }
@@ -102,6 +133,14 @@ if (currentPath.startsWith("/ticket/")) {
 }
 
 function KioskApp() {
+  const viewport = useViewportSize();
+
+  const isVerticalMode =
+    viewport.width <= 1080 || viewport.height > viewport.width;
+
+  const isCompact = viewport.width <= 620;
+  const isVerySmall = viewport.width <= 480;
+
   const [screen, setScreen] = useState("welcome");
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
@@ -109,6 +148,8 @@ function KioskApp() {
   const [createdOrder, setCreatedOrder] = useState(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("TODAS");
+  const [cartModalOpen, setCartModalOpen] = useState(false);
 
   const loadProducts = async () => {
     try {
@@ -139,15 +180,39 @@ function KioskApp() {
     return [...new Set(products.map((product) => product.category))];
   }, [products]);
 
+  const visibleCategories = useMemo(() => {
+    if (selectedCategory === "TODAS") {
+      return categories;
+    }
+
+    return categories.filter((category) => category === selectedCategory);
+  }, [categories, selectedCategory]);
+
   const total = useMemo(() => {
-    return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    return cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
+  }, [cart]);
+
+  const totalItems = useMemo(() => {
+    return cart.reduce((sum, item) => sum + item.quantity, 0);
   }, [cart]);
 
   const addToCart = (product) => {
+    if (!product || product.stock <= 0) {
+      setMessage("Este producto no tiene stock disponible.");
+      return;
+    }
+
     setCart((currentCart) => {
       const existing = currentCart.find((item) => item.id === product.id);
 
       if (existing) {
+        if (existing.quantity >= product.stock) {
+          setMessage(`No hay más stock disponible para ${product.name}.`);
+          return currentCart;
+        }
+
+        setMessage(`${product.name} agregado al pedido.`);
+
         return currentCart.map((item) =>
           item.id === product.id
             ? {
@@ -157,6 +222,8 @@ function KioskApp() {
             : item
         );
       }
+
+      setMessage(`${product.name} agregado al pedido.`);
 
       return [
         ...currentCart,
@@ -183,11 +250,47 @@ function KioskApp() {
     );
   };
 
+  const cancelOrder = () => {
+    if (cart.length === 0) {
+      setMessage("No hay productos para cancelar.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "¿Deseas cancelar el pedido actual y vaciar el carrito?"
+    );
+
+    if (!confirmed) return;
+
+    setCart([]);
+    setCartModalOpen(false);
+    setMessage("Pedido cancelado correctamente.");
+  };
+
+  const goToWelcome = () => {
+    if (cart.length > 0) {
+      const confirmed = window.confirm(
+        "Tienes productos en el carrito. ¿Deseas volver al inicio y cancelar el pedido?"
+      );
+
+      if (!confirmed) return;
+
+      setCart([]);
+    }
+
+    setMessage("");
+    setCartModalOpen(false);
+    setSelectedCategory("TODAS");
+    setScreen("welcome");
+  };
+
   const clearOrder = () => {
     setCart([]);
     setPaymentMethod("yape");
     setCreatedOrder(null);
     setMessage("");
+    setCartModalOpen(false);
+    setSelectedCategory("TODAS");
     setScreen("menu");
     loadProducts();
   };
@@ -197,6 +300,12 @@ function KioskApp() {
       setMessage("Agrega productos al carrito antes de pagar.");
       return;
     }
+
+    const confirmed = window.confirm(
+      `¿Confirmas el pago de S/ ${formatCurrency(total)} y el envío del pedido a cafetería?`
+    );
+
+    if (!confirmed) return;
 
     try {
       setLoading(true);
@@ -241,6 +350,7 @@ function KioskApp() {
 
       setCreatedOrder(paymentData.order);
       setCart([]);
+      setCartModalOpen(false);
       setScreen("confirmation");
     } catch (error) {
       console.error(error);
@@ -252,25 +362,65 @@ function KioskApp() {
 
   if (screen === "welcome") {
     return (
-      <main style={kioskStyles.page}>
-        <section style={kioskStyles.welcomeCard}>
-          <div style={kioskStyles.logo}>USIL</div>
+      <main
+        style={{
+          ...kioskStyles.page,
+          padding: isVerticalMode ? "22px" : "32px"
+        }}
+      >
+        <section
+          style={{
+            ...kioskStyles.welcomeCard,
+            maxWidth: isVerticalMode ? "720px" : "820px",
+            padding: isVerticalMode ? "34px 28px" : "46px"
+          }}
+        >
+          <div
+            style={{
+              ...kioskStyles.logo,
+              width: isVerticalMode ? "108px" : "96px",
+              height: isVerticalMode ? "108px" : "96px",
+              fontSize: isVerticalMode ? "31px" : "28px"
+            }}
+          >
+            USIL
+          </div>
 
-          <h1 style={kioskStyles.welcomeTitle}>Kiosko Cafetería USIL</h1>
+          <h1
+            style={{
+              ...kioskStyles.welcomeTitle,
+              fontSize: isVerticalMode ? "42px" : "48px"
+            }}
+          >
+            Kiosko Cafetería USIL
+          </h1>
 
-          <p style={kioskStyles.welcomeSubtitle}>
+          <p
+            style={{
+              ...kioskStyles.welcomeSubtitle,
+              fontSize: isVerticalMode ? "21px" : "20px"
+            }}
+          >
             Realiza tu pedido de forma rápida, segura y autónoma.
           </p>
 
-          <div style={kioskStyles.steps}>
+          <div
+            style={{
+              ...kioskStyles.steps,
+              gridTemplateColumns: isVerticalMode ? "1fr" : "repeat(2, 1fr)"
+            }}
+          >
             <div style={kioskStyles.step}>1. Elige tus productos</div>
-            <div style={kioskStyles.step}>2. Confirma tu carrito</div>
-            <div style={kioskStyles.step}>3. Simula el pago</div>
-            <div style={kioskStyles.step}>4. Retira tu pedido</div>
+            <div style={kioskStyles.step}>2. Revisa tu pedido</div>
+            <div style={kioskStyles.step}>3. Confirma el pago</div>
+            <div style={kioskStyles.step}>4. Retira con tu número</div>
           </div>
 
           <button
-            style={kioskStyles.startButton}
+            style={{
+              ...kioskStyles.startButton,
+              width: isVerticalMode ? "100%" : "auto"
+            }}
             onClick={() => setScreen("menu")}
           >
             Iniciar pedido
@@ -282,11 +432,28 @@ function KioskApp() {
 
   if (screen === "confirmation") {
     return (
-      <main style={kioskStyles.page}>
-        <section style={kioskStyles.confirmationCard}>
+      <main
+        style={{
+          ...kioskStyles.page,
+          padding: isVerticalMode ? "22px" : "32px"
+        }}
+      >
+        <section
+          style={{
+            ...kioskStyles.confirmationCard,
+            padding: isVerticalMode ? "34px 26px" : "42px"
+          }}
+        >
           <div style={kioskStyles.successIcon}>✓</div>
 
-          <h1 style={kioskStyles.welcomeTitle}>Pedido confirmado</h1>
+          <h1
+            style={{
+              ...kioskStyles.welcomeTitle,
+              fontSize: isVerticalMode ? "40px" : "46px"
+            }}
+          >
+            Pedido confirmado
+          </h1>
 
           <p style={kioskStyles.welcomeSubtitle}>
             Tu pedido fue registrado y enviado a cafetería.
@@ -298,40 +465,89 @@ function KioskApp() {
               <span style={kioskStyles.orderNumber}>
                 {createdOrder.orderNumber}
               </span>
-              <span>Total: S/ {createdOrder.total.toFixed(2)}</span>
-              <span>Pago: {createdOrder.paymentMethod}</span>
-              <span>Estado: {createdOrder.status}</span>
+              <span>Total: S/ {formatCurrency(createdOrder.total)}</span>
+              <span>Pago: {formatPaymentMethod(createdOrder.paymentMethod)}</span>
+              <span>Estado: {formatStatus(createdOrder.status)}</span>
             </div>
           )}
 
           <div style={kioskStyles.confirmationActions}>
-  {createdOrder && (
-    <a
-      href={`/ticket/${createdOrder.orderNumber}`}
-      style={kioskStyles.ticketButton}
-    >
-      Ver comprobante
-    </a>
-  )}
+            {createdOrder && (
+              <a
+                href={`/ticket/${createdOrder.orderNumber}`}
+                style={kioskStyles.ticketButton}
+              >
+                Ver comprobante
+              </a>
+            )}
 
-  <button style={kioskStyles.startButton} onClick={clearOrder}>
-    Realizar otro pedido
-  </button>
-</div>
+            <button style={kioskStyles.startButton} onClick={clearOrder}>
+              Realizar otro pedido
+            </button>
+          </div>
         </section>
       </main>
     );
   }
 
+  const cartPanel = (
+    <CartPanel
+      cart={cart}
+      total={total}
+      totalItems={totalItems}
+      paymentMethod={paymentMethod}
+      setPaymentMethod={setPaymentMethod}
+      addToCart={addToCart}
+      removeFromCart={removeFromCart}
+      processPayment={processPayment}
+      cancelOrder={cancelOrder}
+      goToWelcome={goToWelcome}
+      loading={loading}
+      isVerticalMode={isVerticalMode}
+    />
+  );
+
   return (
-    <main style={kioskStyles.menuPage}>
-      <header style={kioskStyles.header}>
+    <main
+      style={{
+        ...kioskStyles.menuPage,
+        padding: isVerticalMode ? "16px 16px 118px" : "32px"
+      }}
+    >
+      <header
+        style={{
+          ...kioskStyles.header,
+          padding: isVerticalMode ? "18px" : "28px",
+          marginBottom: isVerticalMode ? "14px" : "24px"
+        }}
+      >
         <div>
-          <div style={kioskStyles.logoSmall}>USIL</div>
+          <div
+            style={{
+              ...kioskStyles.logoSmall,
+              width: isVerticalMode ? "54px" : "64px",
+              height: isVerticalMode ? "54px" : "64px",
+              fontSize: isVerticalMode ? "16px" : "18px"
+            }}
+          >
+            USIL
+          </div>
 
-          <h1 style={kioskStyles.menuTitle}>Catálogo de cafetería</h1>
+          <h1
+            style={{
+              ...kioskStyles.menuTitle,
+              fontSize: isVerticalMode ? "30px" : "42px"
+            }}
+          >
+            Catálogo de cafetería
+          </h1>
 
-          <p style={kioskStyles.menuSubtitle}>
+          <p
+            style={{
+              ...kioskStyles.menuSubtitle,
+              fontSize: isVerticalMode ? "15px" : "18px"
+            }}
+          >
             Selecciona tus productos y confirma tu pedido.
           </p>
         </div>
@@ -339,36 +555,145 @@ function KioskApp() {
 
       {message && <p style={kioskStyles.message}>{message}</p>}
 
-      <section style={kioskStyles.menuLayout}>
+      <section
+        style={{
+          ...kioskStyles.menuLayout,
+          gridTemplateColumns: isVerticalMode
+            ? "1fr"
+            : "minmax(0, 1fr) 390px",
+          gap: isVerticalMode ? "16px" : "24px"
+        }}
+      >
         <section style={kioskStyles.productsArea}>
-          {loading && <p>Cargando productos...</p>}
+          <div
+            style={{
+              ...kioskStyles.categoryTabs,
+              position: isVerticalMode ? "sticky" : "relative",
+              top: isVerticalMode ? "0" : "auto",
+              zIndex: isVerticalMode ? 5 : 1,
+              background: COLORS.background,
+              padding: isVerticalMode ? "4px 0 8px" : "0 0 4px"
+            }}
+          >
+            <button
+              style={{
+                ...kioskStyles.categoryTab,
+                ...(selectedCategory === "TODAS"
+                  ? kioskStyles.categoryTabActive
+                  : {})
+              }}
+              onClick={() => setSelectedCategory("TODAS")}
+            >
+              Todos
+            </button>
 
-          {categories.map((category) => (
-            <div key={category} style={kioskStyles.categoryBlock}>
-              <h2 style={kioskStyles.categoryTitle}>{category}</h2>
+            {categories.map((category) => (
+              <button
+                key={category}
+                style={{
+                  ...kioskStyles.categoryTab,
+                  ...(selectedCategory === category
+                    ? kioskStyles.categoryTabActive
+                    : {})
+                }}
+                onClick={() => setSelectedCategory(category)}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
 
-              <div style={kioskStyles.productGrid}>
-                {products
-                  .filter((product) => product.category === category)
-                  .map((product) => (
-                    <article key={product.id} style={kioskStyles.productCard}>
-                      <div style={kioskStyles.productIcon}>
-                        {getProductEmoji(product.image)}
+          {loading && <p style={kioskStyles.loadingText}>Cargando productos...</p>}
+
+          {visibleCategories.map((category) => {
+            const categoryProducts = products.filter(
+              (product) => product.category === category
+            );
+
+            if (categoryProducts.length === 0) return null;
+
+            return (
+              <div key={category} style={kioskStyles.categoryBlock}>
+                <h2
+                  style={{
+                    ...kioskStyles.categoryTitle,
+                    fontSize: isVerticalMode ? "27px" : "28px"
+                  }}
+                >
+                  {category}
+                </h2>
+
+                <div
+                  style={{
+                    ...kioskStyles.productGrid,
+                    gridTemplateColumns: isVerySmall
+                      ? "1fr"
+                      : isVerticalMode
+                        ? "repeat(2, minmax(0, 1fr))"
+                        : "repeat(auto-fill, minmax(270px, 1fr))",
+                    gap: isVerticalMode ? "14px" : "18px"
+                  }}
+                >
+                  {categoryProducts.map((product) => (
+                    <article
+                      key={product.id}
+                      style={{
+                        ...kioskStyles.productCard,
+                        padding: isVerticalMode ? "13px" : "20px",
+                        borderRadius: isVerticalMode ? "22px" : "24px"
+                      }}
+                    >
+                      <div
+                        style={{
+                          ...kioskStyles.productImageBox,
+                          height: isVerySmall
+                            ? "170px"
+                            : isVerticalMode
+                              ? "155px"
+                              : "215px"
+                        }}
+                      >
+                        {getProductImage(product) ? (
+                          <img
+                            src={getProductImage(product)}
+                            alt={product.name}
+                            style={kioskStyles.productImage}
+                          />
+                        ) : (
+                          <div style={kioskStyles.productIcon}>
+                            {getProductEmoji(product.image)}
+                          </div>
+                        )}
                       </div>
 
-                      <h3 style={kioskStyles.productName}>{product.name}</h3>
+                      <h3
+                        style={{
+                          ...kioskStyles.productName,
+                          fontSize: isVerticalMode ? "21px" : "22px"
+                        }}
+                      >
+                        {product.name}
+                      </h3>
 
-                      <p style={kioskStyles.productDescription}>
+                      <p
+                        style={{
+                          ...kioskStyles.productDescription,
+                          fontSize: isVerticalMode ? "14px" : "15px"
+                        }}
+                      >
                         {product.description}
                       </p>
 
                       <div style={kioskStyles.productBottom}>
-                        <strong>S/ {product.price.toFixed(2)}</strong>
+                        <strong>S/ {formatCurrency(product.price)}</strong>
                         <span>Stock: {product.stock}</span>
                       </div>
 
                       <button
-                        style={kioskStyles.addButton}
+                        style={{
+                          ...kioskStyles.addButton,
+                          opacity: product.stock <= 0 ? 0.55 : 1
+                        }}
                         onClick={() => addToCart(product)}
                         disabled={product.stock <= 0}
                       >
@@ -376,81 +701,199 @@ function KioskApp() {
                       </button>
                     </article>
                   ))}
+                </div>
+              </div>
+            );
+          })}
+        </section>
+
+        {!isVerticalMode && cartPanel}
+      </section>
+
+      {isVerticalMode && (
+        <>
+          <CartBottomBar
+            total={total}
+            totalItems={totalItems}
+            onOpen={() => setCartModalOpen(true)}
+            disabled={loading}
+          />
+
+          {cartModalOpen && (
+            <CartModal onClose={() => setCartModalOpen(false)}>
+              {cartPanel}
+            </CartModal>
+          )}
+        </>
+      )}
+    </main>
+  );
+}
+
+function CartBottomBar({ total, totalItems, onOpen, disabled }) {
+  return (
+    <section style={kioskStyles.bottomBar}>
+      <div>
+        <strong style={kioskStyles.bottomBarTitle}>
+          {totalItems === 0 ? "Pedido vacío" : `${totalItems} producto${totalItems === 1 ? "" : "s"}`}
+        </strong>
+        <span style={kioskStyles.bottomBarTotal}>S/ {formatCurrency(total)}</span>
+      </div>
+
+      <button
+        style={{
+          ...kioskStyles.bottomBarButton,
+          opacity: disabled ? 0.65 : 1
+        }}
+        onClick={onOpen}
+        disabled={disabled}
+      >
+        Ver pedido
+      </button>
+    </section>
+  );
+}
+
+function CartModal({ children, onClose }) {
+  return (
+    <div style={kioskStyles.modalOverlay}>
+      <section style={kioskStyles.modalCard}>
+        <div style={kioskStyles.modalHandle} />
+
+        <button style={kioskStyles.modalCloseButton} onClick={onClose}>
+          Cerrar
+        </button>
+
+        {children}
+      </section>
+    </div>
+  );
+}
+
+function CartPanel({
+  cart,
+  total,
+  totalItems,
+  paymentMethod,
+  setPaymentMethod,
+  addToCart,
+  removeFromCart,
+  processPayment,
+  cancelOrder,
+  goToWelcome,
+  loading,
+  isVerticalMode
+}) {
+  return (
+    <aside
+      style={{
+        ...kioskStyles.cartPanel,
+        ...(isVerticalMode ? kioskStyles.cartPanelVertical : {})
+      }}
+    >
+      <div style={kioskStyles.cartHeader}>
+        <div>
+          <h2 style={kioskStyles.cartTitle}>Tu pedido</h2>
+          <p style={kioskStyles.cartSubtitle}>
+            {totalItems === 0
+              ? "Aún no agregaste productos."
+              : `${totalItems} producto${totalItems === 1 ? "" : "s"} seleccionado${
+                  totalItems === 1 ? "" : "s"
+                }.`}
+          </p>
+        </div>
+
+        {totalItems > 0 && <span style={kioskStyles.cartBadge}>{totalItems}</span>}
+      </div>
+
+      {cart.length === 0 ? (
+        <p style={kioskStyles.emptyCart}>
+          Elige productos del catálogo para iniciar tu pedido.
+        </p>
+      ) : (
+        <div
+          style={{
+            ...kioskStyles.cartList,
+            maxHeight: isVerticalMode ? "260px" : "none",
+            overflowY: isVerticalMode ? "auto" : "visible"
+          }}
+        >
+          {cart.map((item) => (
+            <div key={item.id} style={kioskStyles.cartItem}>
+              <div>
+                <strong>{item.name}</strong>
+
+                <span style={kioskStyles.cartDetail}>
+                  S/ {formatCurrency(item.price)} x {item.quantity}
+                </span>
+              </div>
+
+              <div style={kioskStyles.cartActions}>
+                <button
+                  style={kioskStyles.quantityButton}
+                  onClick={() => removeFromCart(item.id)}
+                >
+                  -
+                </button>
+
+                <span style={kioskStyles.quantityText}>{item.quantity}</span>
+
+                <button
+                  style={kioskStyles.quantityButton}
+                  onClick={() => addToCart(item)}
+                >
+                  +
+                </button>
               </div>
             </div>
           ))}
-        </section>
+        </div>
+      )}
 
-        <aside style={kioskStyles.cartPanel}>
-          <h2 style={kioskStyles.cartTitle}>Tu pedido</h2>
+      <div style={kioskStyles.totalBox}>
+        <span>Total</span>
+        <strong>S/ {formatCurrency(total)}</strong>
+      </div>
 
-          {cart.length === 0 ? (
-            <p style={kioskStyles.emptyCart}>Aún no agregaste productos.</p>
-          ) : (
-            <div style={kioskStyles.cartList}>
-              {cart.map((item) => (
-                <div key={item.id} style={kioskStyles.cartItem}>
-                  <div>
-                    <strong>{item.name}</strong>
-
-                    <span style={kioskStyles.cartDetail}>
-                      S/ {item.price.toFixed(2)} x {item.quantity}
-                    </span>
-                  </div>
-
-                  <div style={kioskStyles.cartActions}>
-                    <button
-                      style={kioskStyles.quantityButton}
-                      onClick={() => removeFromCart(item.id)}
-                    >
-                      -
-                    </button>
-
-                    <span>{item.quantity}</span>
-
-                    <button
-                      style={kioskStyles.quantityButton}
-                      onClick={() => addToCart(item)}
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div style={kioskStyles.totalBox}>
-            <span>Total</span>
-            <strong>S/ {total.toFixed(2)}</strong>
-          </div>
-
-          <div style={kioskStyles.paymentBox}>
-            <label style={kioskStyles.paymentLabel}>
-              Método de pago
-              <select
-                style={kioskStyles.paymentSelect}
-                value={paymentMethod}
-                onChange={(event) => setPaymentMethod(event.target.value)}
-              >
-                <option value="yape">Yape</option>
-                <option value="plin">Plin</option>
-                <option value="tarjeta">Tarjeta</option>
-                <option value="qr">QR</option>
-              </select>
-            </label>
-          </div>
-
-          <button
-            style={kioskStyles.payButton}
-            onClick={processPayment}
-            disabled={loading || cart.length === 0}
+      <div style={kioskStyles.paymentBox}>
+        <label style={kioskStyles.paymentLabel}>
+          Método de pago
+          <select
+            style={kioskStyles.paymentSelect}
+            value={paymentMethod}
+            onChange={(event) => setPaymentMethod(event.target.value)}
           >
-            {loading ? "Procesando..." : "Pagar y enviar pedido"}
+            <option value="yape">Yape</option>
+            <option value="plin">Plin</option>
+            <option value="tarjeta">Tarjeta</option>
+            <option value="qr">QR</option>
+          </select>
+        </label>
+      </div>
+
+      <button
+        style={{
+          ...kioskStyles.payButton,
+          opacity: loading || cart.length === 0 ? 0.6 : 1
+        }}
+        onClick={processPayment}
+        disabled={loading || cart.length === 0}
+      >
+        {loading ? "Procesando..." : `Pagar S/ ${formatCurrency(total)}`}
+      </button>
+
+      <div style={kioskStyles.cartSecondaryActions}>
+        {cart.length > 0 && (
+          <button style={kioskStyles.cancelButton} onClick={cancelOrder}>
+            Cancelar pedido
           </button>
-        </aside>
-      </section>
-    </main>
+        )}
+
+        <button style={kioskStyles.homeButton} onClick={goToWelcome}>
+          Volver al inicio
+        </button>
+      </div>
+    </aside>
   );
 }
 
@@ -598,7 +1041,7 @@ function AdminPanel() {
 
         <article style={adminStyles.metricCard}>
           <span>Ventas</span>
-          <strong>S/ {salesTotal.toFixed(2)}</strong>
+          <strong>S/ {formatCurrency(salesTotal)}</strong>
         </article>
       </section>
 
@@ -653,7 +1096,7 @@ function OrderColumn({ title, orders, actionLabel, onAction }) {
           <article key={order.id} style={adminStyles.orderCard}>
             <div style={adminStyles.orderHeader}>
               <strong>{order.orderNumber}</strong>
-              <span>S/ {order.total.toFixed(2)}</span>
+              <span>S/ {formatCurrency(order.total)}</span>
             </div>
 
             <p style={adminStyles.orderClient}>{order.customerName}</p>
@@ -666,7 +1109,9 @@ function OrderColumn({ title, orders, actionLabel, onAction }) {
               ))}
             </ul>
 
-            <p style={adminStyles.paymentText}>Pago: {order.paymentMethod}</p>
+            <p style={adminStyles.paymentText}>
+              Pago: {formatPaymentMethod(order.paymentMethod)}
+            </p>
 
             {onAction ? (
               <button
@@ -685,6 +1130,32 @@ function OrderColumn({ title, orders, actionLabel, onAction }) {
   );
 }
 
+function useViewportSize() {
+  const [viewport, setViewport] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setViewport({
+        width: window.innerWidth,
+        height: window.innerHeight
+      });
+    };
+
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
+  }, []);
+
+  return viewport;
+}
+
 function getProductEmoji(image) {
   const emojis = {
     coffee: "☕",
@@ -701,6 +1172,93 @@ function getProductEmoji(image) {
   return emojis[image] || "🍴";
 }
 
+function getProductImage(product) {
+  if (!product) return null;
+
+  const imageKey = normalizeText(product.image || "");
+
+  if (imageKey && PRODUCT_IMAGES[imageKey]) {
+    return PRODUCT_IMAGES[imageKey];
+  }
+
+  const name = normalizeText(product.name || "");
+
+  if (name.includes("cafe")) {
+    return cafeAmericanoImg;
+  }
+
+  if (name.includes("capuccino") || name.includes("cappuccino")) {
+    return capuccinoImg;
+  }
+
+  if (name.includes("jugo")) {
+    return jugoNaranjaImg;
+  }
+
+  if (name.includes("pan con pollo")) {
+    return panPolloImg;
+  }
+
+  if (name.includes("empanada")) {
+    return empanadaCarneImg;
+  }
+
+  if (name.includes("menu")) {
+    return menuEjecutivoImg;
+  }
+
+  if (name.includes("brownie")) {
+    return brownieImg;
+  }
+
+  if (name.includes("agua")) {
+    return aguaMineralImg;
+  }
+
+  if (name.includes("triple")) {
+    return triplePolloImg;
+  }
+
+  return null;
+}
+
+function normalizeText(value) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function formatCurrency(value) {
+  return Number(value || 0).toFixed(2);
+}
+
+function formatPaymentMethod(method) {
+  const labels = {
+    yape: "Yape",
+    plin: "Plin",
+    tarjeta: "Tarjeta",
+    qr: "QR",
+    pendiente: "Pendiente"
+  };
+
+  return labels[method] || method;
+}
+
+function formatStatus(status) {
+  const labels = {
+    pendiente: "Pendiente",
+    pagado: "Pagado",
+    preparando: "En preparación",
+    listo: "Listo",
+    entregado: "Entregado",
+    cancelado: "Cancelado"
+  };
+
+  return labels[status] || status;
+}
+
 const kioskStyles = {
   page: {
     minHeight: "100vh",
@@ -713,15 +1271,17 @@ const kioskStyles = {
     color: COLORS.text
   },
   welcomeCard: {
-    maxWidth: "760px",
+    width: "100%",
+    maxWidth: "820px",
     background: COLORS.white,
     borderRadius: "34px",
-    padding: "42px",
+    padding: "46px",
     textAlign: "center",
     border: `1px solid ${COLORS.border}`,
     boxShadow: "0 24px 70px rgba(11, 46, 107, 0.16)"
   },
   confirmationCard: {
+    width: "100%",
     maxWidth: "660px",
     background: COLORS.white,
     borderRadius: "34px",
@@ -759,12 +1319,13 @@ const kioskStyles = {
   welcomeTitle: {
     margin: 0,
     color: COLORS.primary,
-    fontSize: "46px"
+    fontSize: "48px"
   },
   welcomeSubtitle: {
     margin: "12px 0 0",
     color: COLORS.textSoft,
-    fontSize: "20px"
+    fontSize: "20px",
+    lineHeight: 1.45
   },
   steps: {
     display: "grid",
@@ -777,23 +1338,24 @@ const kioskStyles = {
     color: COLORS.primary,
     borderRadius: "18px",
     padding: "18px",
-    fontWeight: "800"
+    fontWeight: "800",
+    fontSize: "17px"
   },
   confirmationActions: {
-  display: "grid",
-  gap: "14px"
-},
-ticketButton: {
-  background: COLORS.success,
-  color: COLORS.white,
-  border: "none",
-  borderRadius: "999px",
-  padding: "18px 36px",
-  fontSize: "20px",
-  fontWeight: "900",
-  cursor: "pointer",
-  textDecoration: "none"
-},
+    display: "grid",
+    gap: "14px"
+  },
+  ticketButton: {
+    background: COLORS.success,
+    color: COLORS.white,
+    border: "none",
+    borderRadius: "999px",
+    padding: "18px 36px",
+    fontSize: "20px",
+    fontWeight: "900",
+    cursor: "pointer",
+    textDecoration: "none"
+  },
   startButton: {
     background: COLORS.primary,
     color: COLORS.white,
@@ -838,17 +1400,46 @@ ticketButton: {
     border: `1px solid ${COLORS.border}`,
     borderRadius: "18px",
     padding: "14px 18px",
-    fontWeight: "800"
+    fontWeight: "800",
+    marginBottom: "18px"
   },
   menuLayout: {
     display: "grid",
-    gridTemplateColumns: "1fr 380px",
+    gridTemplateColumns: "minmax(0, 1fr) 390px",
     gap: "24px",
     alignItems: "start"
   },
   productsArea: {
     display: "grid",
-    gap: "28px"
+    gap: "24px"
+  },
+  categoryTabs: {
+    display: "flex",
+    gap: "12px",
+    overflowX: "auto",
+    paddingBottom: "4px",
+    scrollbarWidth: "thin"
+  },
+  categoryTab: {
+    minWidth: "fit-content",
+    background: COLORS.white,
+    color: COLORS.primary,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: "999px",
+    padding: "13px 20px",
+    fontWeight: "900",
+    fontSize: "15px",
+    cursor: "pointer",
+    boxShadow: "0 8px 20px rgba(11, 46, 107, 0.05)"
+  },
+  categoryTabActive: {
+    background: COLORS.primary,
+    color: COLORS.white,
+    border: `1px solid ${COLORS.primary}`
+  },
+  loadingText: {
+    color: COLORS.textSoft,
+    fontWeight: "800"
   },
   categoryBlock: {
     display: "grid",
@@ -861,7 +1452,7 @@ ticketButton: {
   },
   productGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fill, minmax(270px, 1fr))",
     gap: "18px"
   },
   productCard: {
@@ -872,6 +1463,22 @@ ticketButton: {
     display: "grid",
     gap: "12px",
     boxShadow: "0 10px 26px rgba(11, 46, 107, 0.06)"
+  },
+  productImageBox: {
+    width: "100%",
+    height: "215px",
+    borderRadius: "22px",
+    background: "#F8FAFE",
+    overflow: "hidden",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  productImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    display: "block"
   },
   productIcon: {
     width: "72px",
@@ -886,7 +1493,8 @@ ticketButton: {
   productName: {
     margin: 0,
     color: COLORS.text,
-    fontSize: "22px"
+    fontSize: "22px",
+    lineHeight: 1.12
   },
   productDescription: {
     margin: 0,
@@ -898,17 +1506,95 @@ ticketButton: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    color: COLORS.primary
+    color: COLORS.primary,
+    fontSize: "15px"
   },
   addButton: {
     background: COLORS.success,
     color: COLORS.white,
     border: "none",
     borderRadius: "16px",
-    padding: "13px",
+    padding: "14px",
     fontSize: "16px",
     fontWeight: "900",
     cursor: "pointer"
+  },
+  bottomBar: {
+    position: "fixed",
+    left: "14px",
+    right: "14px",
+    bottom: "14px",
+    background: COLORS.primary,
+    color: COLORS.white,
+    borderRadius: "26px",
+    padding: "16px 18px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "14px",
+    zIndex: 20,
+    boxShadow: "0 20px 50px rgba(11, 46, 107, 0.35)"
+  },
+  bottomBarTitle: {
+    display: "block",
+    fontSize: "16px"
+  },
+  bottomBarTotal: {
+    display: "block",
+    fontSize: "22px",
+    fontWeight: "900",
+    marginTop: "4px"
+  },
+  bottomBarButton: {
+    background: COLORS.white,
+    color: COLORS.primary,
+    border: "none",
+    borderRadius: "999px",
+    padding: "15px 22px",
+    fontSize: "16px",
+    fontWeight: "900",
+    cursor: "pointer",
+    minWidth: "132px"
+  },
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(7, 19, 42, 0.45)",
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "center",
+    zIndex: 40,
+    padding: "14px"
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: "760px",
+    maxHeight: "88vh",
+    overflowY: "auto",
+    background: COLORS.white,
+    borderRadius: "30px 30px 24px 24px",
+    border: `1px solid ${COLORS.border}`,
+    padding: "14px",
+    boxShadow: "0 -20px 60px rgba(7, 19, 42, 0.25)"
+  },
+  modalHandle: {
+    width: "66px",
+    height: "6px",
+    borderRadius: "999px",
+    background: COLORS.border,
+    margin: "4px auto 12px"
+  },
+  modalCloseButton: {
+    width: "100%",
+    background: COLORS.primaryLight,
+    color: COLORS.primary,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: "16px",
+    padding: "13px",
+    fontSize: "15px",
+    fontWeight: "900",
+    cursor: "pointer",
+    marginBottom: "12px"
   },
   cartPanel: {
     background: COLORS.white,
@@ -917,19 +1603,54 @@ ticketButton: {
     padding: "24px",
     position: "sticky",
     top: "24px",
-    boxShadow: "0 12px 32px rgba(11, 46, 107, 0.08)"
+    boxShadow: "0 18px 42px rgba(11, 46, 107, 0.12)",
+    zIndex: 4
+  },
+  cartPanelVertical: {
+    position: "relative",
+    top: 0,
+    padding: "16px",
+    borderRadius: "22px",
+    boxShadow: "none"
+  },
+  cartHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "12px",
+    alignItems: "flex-start"
   },
   cartTitle: {
-    margin: "0 0 16px",
+    margin: "0 0 6px",
     color: COLORS.primary,
     fontSize: "30px"
   },
+  cartSubtitle: {
+    margin: 0,
+    color: COLORS.textSoft,
+    fontSize: "14px"
+  },
+  cartBadge: {
+    minWidth: "36px",
+    height: "36px",
+    borderRadius: "50%",
+    background: COLORS.primary,
+    color: COLORS.white,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: "900"
+  },
   emptyCart: {
-    color: COLORS.textSoft
+    color: COLORS.textSoft,
+    background: COLORS.background,
+    borderRadius: "16px",
+    padding: "14px",
+    marginTop: "14px"
   },
   cartList: {
     display: "grid",
-    gap: "12px"
+    gap: "12px",
+    marginTop: "14px"
   },
   cartItem: {
     background: COLORS.background,
@@ -950,14 +1671,21 @@ ticketButton: {
     alignItems: "center"
   },
   quantityButton: {
-    width: "30px",
-    height: "30px",
+    width: "34px",
+    height: "34px",
     borderRadius: "50%",
     border: "none",
     background: COLORS.primary,
     color: COLORS.white,
     fontWeight: "900",
-    cursor: "pointer"
+    cursor: "pointer",
+    fontSize: "18px"
+  },
+  quantityText: {
+    minWidth: "18px",
+    textAlign: "center",
+    fontWeight: "900",
+    color: COLORS.primary
   },
   totalBox: {
     marginTop: "18px",
@@ -980,7 +1708,8 @@ ticketButton: {
     border: `1px solid ${COLORS.border}`,
     borderRadius: "16px",
     padding: "14px",
-    fontSize: "16px"
+    fontSize: "16px",
+    background: COLORS.white
   },
   payButton: {
     width: "100%",
@@ -991,6 +1720,34 @@ ticketButton: {
     borderRadius: "18px",
     padding: "17px",
     fontSize: "18px",
+    fontWeight: "900",
+    cursor: "pointer"
+  },
+  cartSecondaryActions: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: "10px",
+    marginTop: "12px"
+  },
+  cancelButton: {
+    width: "100%",
+    background: "#FFE9EC",
+    color: COLORS.danger,
+    border: "none",
+    borderRadius: "16px",
+    padding: "13px",
+    fontSize: "15px",
+    fontWeight: "900",
+    cursor: "pointer"
+  },
+  homeButton: {
+    width: "100%",
+    background: COLORS.primaryLight,
+    color: COLORS.primary,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: "16px",
+    padding: "13px",
+    fontSize: "15px",
     fontWeight: "900",
     cursor: "pointer"
   },
