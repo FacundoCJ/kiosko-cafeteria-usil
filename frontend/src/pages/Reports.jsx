@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getAuthHeaders, logout } from "../services/auth.service.js";
+import {
+  getAuthHeaders,
+  getCurrentUser,
+  logout
+} from "../services/auth.service.js";
 
 const API_URL = "/api";
 
@@ -25,6 +29,10 @@ export default function Reports() {
   const [to, setTo] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+const currentUser = getCurrentUser();
+const canManageUsers = currentUser?.role === "ADMIN";
+const canManageProducts = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -128,13 +136,17 @@ export default function Reports() {
     Panel pedidos
   </a>
 
-  <a href="/admin/usuarios" style={styles.secondaryButton}>
-    Usuarios
-  </a>
+  {canManageUsers && (
+    <a href="/admin/usuarios" style={styles.secondaryButton}>
+      Usuarios
+    </a>
+  )}
 
-  <a href="/admin/productos" style={styles.secondaryButton}>
-    Productos
-  </a>
+  {canManageProducts && (
+    <a href="/admin/productos" style={styles.secondaryButton}>
+      Productos
+    </a>
+  )}
 
   <a href="/" style={styles.secondaryButton}>
     Ir al kiosko

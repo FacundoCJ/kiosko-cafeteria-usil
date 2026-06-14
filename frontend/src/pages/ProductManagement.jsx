@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { getAuthHeaders, logout } from "../services/auth.service.js";
+import {
+  getAuthHeaders,
+  getCurrentUser,
+  logout
+} from "../services/auth.service.js";
 
 const API_URL = "/api";
 
@@ -36,6 +40,10 @@ export default function ProductManagement() {
   const [selectedCategory, setSelectedCategory] = useState("Todas");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+const currentUser = getCurrentUser();
+const canManageUsers = currentUser?.role === "ADMIN";
+const canViewReports = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
 
   const loadProducts = async () => {
     try {
@@ -300,13 +308,17 @@ export default function ProductManagement() {
     Panel pedidos
   </a>
 
-  <a href="/admin/usuarios" style={styles.secondaryButton}>
-    Usuarios
-  </a>
+  {canManageUsers && (
+    <a href="/admin/usuarios" style={styles.secondaryButton}>
+      Usuarios
+    </a>
+  )}
 
-  <a href="/admin/reportes" style={styles.secondaryButton}>
-    Reportes
-  </a>
+  {canViewReports && (
+    <a href="/admin/reportes" style={styles.secondaryButton}>
+      Reportes
+    </a>
+  )}
 
   <a href="/" style={styles.secondaryButton}>
     Ir al kiosko

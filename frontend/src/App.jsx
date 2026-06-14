@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Reports from "./pages/Reports.jsx";
 import { createRoot } from "react-dom/client";
+import Unauthorized from "./pages/Unauthorized.jsx";
+import { getCurrentUser } from "./services/auth.service.js";
 import ProductManagement from "./pages/ProductManagement.jsx";
 import UserManagement from "./pages/UserManagement.jsx";
 import Login from "./pages/Login.jsx";
@@ -28,6 +30,20 @@ const COLORS = {
 
 function Root() {
   const currentPath = window.location.pathname;
+  const currentUser = getCurrentUser();
+
+  const protectRoute = (Component, allowedRoles) => {
+    if (!isAuthenticated()) {
+      window.location.href = "/login";
+      return null;
+    }
+
+    if (!currentUser || !allowedRoles.includes(currentUser.role)) {
+      return <Unauthorized />;
+    }
+
+    return <Component />;
+  };
 
   if (currentPath.startsWith("/login")) {
     if (isAuthenticated()) {
@@ -39,39 +55,19 @@ function Root() {
   }
 
   if (currentPath.startsWith("/admin/usuarios")) {
-    if (!isAuthenticated()) {
-      window.location.href = "/login";
-      return null;
-    }
-
-    return <UserManagement />;
+    return protectRoute(UserManagement, ["ADMIN"]);
   }
 
   if (currentPath.startsWith("/admin/reportes")) {
-    if (!isAuthenticated()) {
-      window.location.href = "/login";
-      return null;
-    }
-
-    return <Reports />;
+    return protectRoute(Reports, ["ADMIN", "CAFETERIA"]);
   }
 
   if (currentPath.startsWith("/admin/productos")) {
-    if (!isAuthenticated()) {
-      window.location.href = "/login";
-      return null;
-    }
-
-    return <ProductManagement />;
+    return protectRoute(ProductManagement, ["ADMIN", "CAFETERIA"]);
   }
 
   if (currentPath.startsWith("/admin")) {
-    if (!isAuthenticated()) {
-      window.location.href = "/login";
-      return null;
-    }
-
-    return <AdminPanel />;
+    return protectRoute(AdminPanel, ["ADMIN", "CAFETERIA", "COCINA"]);
   }
 
   return <KioskApp />;
@@ -247,9 +243,7 @@ function KioskApp() {
             Iniciar pedido
           </button>
 
-          <a href="/admin" style={kioskStyles.adminLink}>
-            Panel de cafetería
-          </a>
+          
         </section>
       </main>
     );
@@ -293,10 +287,6 @@ function KioskApp() {
             Selecciona tus productos y confirma tu pedido.
           </p>
         </div>
-
-        <a href="/admin" style={kioskStyles.adminButton}>
-          Panel cafetería
-        </a>
       </header>
 
       {message && <p style={kioskStyles.message}>{message}</p>}
@@ -419,6 +409,13 @@ function AdminPanel() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
+const currentUser = getCurrentUser();
+
+const canManageUsers = currentUser?.role === "ADMIN";
+const canManageProducts = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
+const canViewReports = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
+const canDeliverOrders = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
+
   const loadOrders = async () => {
     try {
       setLoading(true);
@@ -495,17 +492,23 @@ function AdminPanel() {
         </div>
 
         <div style={adminStyles.headerActions}>
-  <a href="/admin/usuarios" style={adminStyles.linkButton}>
-    Usuarios
-  </a>
+  {canManageUsers && (
+    <a href="/admin/usuarios" style={adminStyles.linkButton}>
+      Usuarios
+    </a>
+  )}
 
-  <a href="/admin/reportes" style={adminStyles.linkButton}>
-    Reportes
-  </a>
+  {canViewReports && (
+    <a href="/admin/reportes" style={adminStyles.linkButton}>
+      Reportes
+    </a>
+  )}
 
-  <a href="/admin/productos" style={adminStyles.linkButton}>
-    Gestionar productos
-  </a>
+  {canManageProducts && (
+    <a href="/admin/productos" style={adminStyles.linkButton}>
+      Gestionar productos
+    </a>
+  )}
 
   <a href="/" style={adminStyles.linkButton}>
     Ir al kiosko
@@ -561,11 +564,15 @@ function AdminPanel() {
         />
 
         <OrderColumn
-          title="Listos"
-          orders={readyOrders}
-          actionLabel="Entregar"
-          onAction={(orderId) => updateOrderStatus(orderId, "entregado")}
-        />
+  title="Listos"
+  orders={readyOrders}
+  actionLabel={canDeliverOrders ? "Entregar" : "Esperando entrega"}
+  onAction={
+    canDeliverOrders
+      ? (orderId) => updateOrderStatus(orderId, "entregado")
+      : null
+  }
+/>
 
         <OrderColumn
           title="Entregados"
