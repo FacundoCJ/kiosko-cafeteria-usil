@@ -1,10 +1,11 @@
-require("dotenv").config();
-
-const pkg = require("@prisma/client");
-const { PrismaPg } = require("@prisma/adapter-pg");
+const dotenv = require("dotenv");
+const bcrypt = require("bcryptjs");
 const pg = require("pg");
+const { PrismaPg } = require("@prisma/adapter-pg");
+const { PrismaClient } = require("@prisma/client");
 
-const { PrismaClient } = pkg;
+dotenv.config();
+
 const { Pool } = pg;
 
 const pool = new Pool({
@@ -12,7 +13,10 @@ const pool = new Pool({
 });
 
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+
+const prisma = new PrismaClient({
+  adapter
+});
 
 const categories = [
   "Bebidas calientes",
@@ -36,7 +40,7 @@ const products = [
     name: "Capuccino",
     description: "Café con leche vaporizada y espuma.",
     category: "Bebidas calientes",
-    price: 6.0,
+    price: 6,
     stock: 18,
     image: "cappuccino"
   },
@@ -49,6 +53,14 @@ const products = [
     image: "juice"
   },
   {
+    name: "Agua mineral",
+    description: "Botella personal de agua sin gas.",
+    category: "Bebidas frías",
+    price: 3,
+    stock: 30,
+    image: "water"
+  },
+  {
     name: "Pan con pollo",
     description: "Sándwich de pollo con lechuga y mayonesa.",
     category: "Sánguches",
@@ -57,10 +69,18 @@ const products = [
     image: "sandwich"
   },
   {
+    name: "Triple de pollo",
+    description: "Sándwich triple con pollo, palta, huevo y mayonesa.",
+    category: "Sánguches",
+    price: 9,
+    stock: 24,
+    image: "triple"
+  },
+  {
     name: "Empanada de carne",
     description: "Empanada horneada rellena de carne.",
     category: "Snacks",
-    price: 5.0,
+    price: 5,
     stock: 22,
     image: "empanada"
   },
@@ -68,7 +88,7 @@ const products = [
     name: "Menú ejecutivo",
     description: "Plato de fondo, bebida y postre del día.",
     category: "Menús",
-    price: 15.0,
+    price: 15,
     stock: 12,
     image: "menu"
   },
@@ -76,69 +96,137 @@ const products = [
     name: "Brownie",
     description: "Postre de chocolate individual.",
     category: "Postres",
-    price: 4.0,
+    price: 4,
     stock: 16,
     image: "brownie"
-  },
-  {
-    name: "Agua mineral",
-    description: "Botella personal de agua sin gas.",
-    category: "Bebidas frías",
-    price: 3.0,
-    stock: 30,
-    image: "water"
   }
 ];
 
-async function main() {
-  console.log("Iniciando carga inicial de datos...");
+const users = [
+  {
+    name: "Administrador USIL",
+    email: "admin@usil.edu.pe",
+    password: "Admin123",
+    role: "ADMIN"
+  },
+  {
+    name: "Personal de Cafetería",
+    email: "cafeteria@usil.edu.pe",
+    password: "Cafe123",
+    role: "CAFETERIA"
+  },
+  {
+    name: "Personal de Cocina",
+    email: "cocina@usil.edu.pe",
+    password: "Cocina123",
+    role: "COCINA"
+  }
+];
+
+const seedCategories = async () => {
+  const categoryMap = {};
 
   for (const categoryName of categories) {
-    await prisma.category.upsert({
-      where: { name: categoryName },
-      update: {},
-      create: { name: categoryName }
+    const category = await prisma.category.upsert({
+      where: {
+        name: categoryName
+      },
+      update: {
+        name: categoryName
+      },
+      create: {
+        name: categoryName
+      }
     });
+
+    categoryMap[categoryName] = category;
   }
 
+  return categoryMap;
+};
+
+const seedProducts = async (categoryMap) => {
   for (const product of products) {
-    const category = await prisma.category.findUnique({
-      where: { name: product.category }
-    });
+    const category = categoryMap[product.category];
+
+    if (!category) {
+      throw new Error(`Categoría no encontrada: ${product.category}`);
+    }
 
     const existingProduct = await prisma.product.findFirst({
-      where: { name: product.name }
+      where: {
+        name: product.name
+      }
     });
+
+    const productData = {
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      stock: product.stock,
+      image: product.image,
+      isActive: true,
+      categoryId: category.id
+    };
 
     if (existingProduct) {
       await prisma.product.update({
-        where: { id: existingProduct.id },
-        data: {
-          description: product.description,
-          price: product.price,
-          stock: product.stock,
-          image: product.image,
-          isActive: true,
-          categoryId: category.id
-        }
+        where: {
+          id: existingProduct.id
+        },
+        data: productData
       });
     } else {
       await prisma.product.create({
-        data: {
-          name: product.name,
-          description: product.description,
-          price: product.price,
-          stock: product.stock,
-          image: product.image,
-          isActive: true,
-          categoryId: category.id
-        }
+        data: productData
       });
     }
   }
+};
 
+const seedUsers = async () => {
+  for (const user of users) {
+    const hashedPassword = await bcrypt.hash(user.password, 10);
+
+    await prisma.user.upsert({
+      where: {
+        email: user.email
+      },
+      update: {
+        name: user.name,
+        password: hashedPassword,
+        role: user.role,
+        isActive: true
+      },
+      create: {
+        name: user.name,
+        email: user.email,
+        password: hashedPassword,
+        role: user.role,
+        isActive: true
+      }
+    });
+  }
+};
+
+const main = async () => {
+  console.log("=====================================");
+  console.log("Iniciando carga inicial de datos...");
+  console.log("=====================================");
+
+  const categoryMap = await seedCategories();
+
+  await seedProducts(categoryMap);
+  await seedUsers();
+
+  console.log("Categorías cargadas:", categories.length);
+  console.log("Productos cargados:", products.length);
+  console.log("Usuarios demo cargados:", users.length);
+
+  console.log("=====================================");
   console.log("Datos iniciales cargados correctamente.");
-}
+  console.log("=====================================");
+};
 
 main()
   .catch((error) => {
