@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import logoUsilCuadradoImg from "../assets/branding/logo-usil-cuadrado.png";
 import {
   getAuthHeaders,
   getCurrentUser,
@@ -10,35 +11,60 @@ const API_URL = "/api";
 const COLORS = {
   primary: "#0B2E6B",
   primaryLight: "#EAF1FF",
-  secondary: "#1E4FA8",
   white: "#FFFFFF",
   background: "#F5F7FB",
   text: "#162033",
   textSoft: "#5B6780",
   border: "#D7E1F2",
   success: "#1F9D55",
+  successLight: "#E9F8EF",
   danger: "#D72638",
-  warning: "#F4B400"
+  dangerLight: "#FFE9EC",
+  warning: "#F4B400",
+  warningLight: "#FFF7DF",
+  purple: "#8B0AAE",
+  purpleLight: "#F8E9FF"
 };
 
-const emptyForm = {
+const ROLE_OPTIONS = [
+  {
+    value: "ADMIN",
+    label: "Administrador",
+    description: "Acceso completo al sistema"
+  },
+  {
+    value: "CAFETERIA",
+    label: "Cafetería",
+    description: "Gestiona pedidos, productos y reportes"
+  },
+  {
+    value: "COCINA",
+    label: "Cocina",
+    description: "Gestiona preparación de pedidos"
+  }
+];
+
+const EMPTY_FORM = {
   name: "",
   email: "",
   password: "",
-  role: "CAFETERIA"
+  role: "CAFETERIA",
+  isActive: true
 };
 
 export default function UserManagement() {
-  const formRef = useRef(null);
   const currentUser = getCurrentUser();
 
   const [users, setUsers] = useState([]);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(EMPTY_FORM);
   const [editingUserId, setEditingUserId] = useState(null);
-  const [editingUserName, setEditingUserName] = useState("");
   const [selectedRole, setSelectedRole] = useState("TODOS");
+  const [selectedStatus, setSelectedStatus] = useState("TODOS");
+  const [searchTerm, setSearchTerm] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const isEditing = Boolean(editingUserId);
 
   const loadUsers = async () => {
     try {
@@ -69,90 +95,108 @@ export default function UserManagement() {
   }, []);
 
   const filteredUsers = useMemo(() => {
-    if (selectedRole === "TODOS") return users;
-    return users.filter((user) => user.role === selectedRole);
-  }, [users, selectedRole]);
+    const normalizedSearch = searchTerm.trim().toLowerCase();
 
-  const adminCount = useMemo(() => {
-    return users.filter((user) => user.role === "ADMIN").length;
-  }, [users]);
+    return users.filter((user) => {
+      const matchesRole =
+        selectedRole === "TODOS" || user.role === selectedRole;
 
-  const cafeteriaCount = useMemo(() => {
-    return users.filter((user) => user.role === "CAFETERIA").length;
-  }, [users]);
+      const matchesStatus =
+        selectedStatus === "TODOS" ||
+        (selectedStatus === "ACTIVOS" && user.isActive) ||
+        (selectedStatus === "INACTIVOS" && !user.isActive);
 
-  const cocinaCount = useMemo(() => {
-    return users.filter((user) => user.role === "COCINA").length;
-  }, [users]);
+      const matchesSearch =
+        !normalizedSearch ||
+        user.name?.toLowerCase().includes(normalizedSearch) ||
+        user.email?.toLowerCase().includes(normalizedSearch);
 
-  const inactiveCount = useMemo(() => {
-    return users.filter((user) => !user.isActive).length;
+      return matchesRole && matchesStatus && matchesSearch;
+    });
+  }, [users, selectedRole, selectedStatus, searchTerm]);
+
+  const metrics = useMemo(() => {
+    return {
+      totalUsers: users.length,
+      activeUsers: users.filter((user) => user.isActive).length,
+      inactiveUsers: users.filter((user) => !user.isActive).length,
+      admins: users.filter((user) => user.role === "ADMIN").length,
+      cafeteria: users.filter((user) => user.role === "CAFETERIA").length,
+      cocina: users.filter((user) => user.role === "COCINA").length
+    };
   }, [users]);
 
   const handleChange = (event) => {
-    const { name, value } = event.target;
+    const { name, value, type, checked } = event.target;
 
     setForm((currentForm) => ({
       ...currentForm,
-      [name]: value
+      [name]: type === "checkbox" ? checked : value
     }));
   };
 
   const resetForm = () => {
-    setForm(emptyForm);
+    setForm(EMPTY_FORM);
     setEditingUserId(null);
-    setEditingUserName("");
   };
 
-  const handleEdit = (user) => {
-    setEditingUserId(user.id);
-    setEditingUserName(user.name);
+  const validateForm = () => {
+    if (!form.name.trim()) {
+      setMessage("Ingresa el nombre del usuario.");
+      return false;
+    }
 
-    setForm({
-      name: user.name,
-      email: user.email,
-      password: "",
-      role: user.role
-    });
+    if (!form.email.trim()) {
+      setMessage("Ingresa el correo del usuario.");
+      return false;
+    }
 
-    setMessage(`Editando usuario: ${user.name}`);
+    if (!isEditing && !form.password.trim()) {
+      setMessage("Ingresa una contraseña para el nuevo usuario.");
+      return false;
+    }
 
-    setTimeout(() => {
-      formRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start"
-      });
-    }, 100);
+    if (!form.role) {
+      setMessage("Selecciona un rol.");
+      return false;
+    }
+
+    if (form.password && form.password.length < 6) {
+      setMessage("La contraseña debe tener como mínimo 6 caracteres.");
+      return false;
+    }
+
+    return true;
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    if (!validateForm()) return;
 
     try {
       setLoading(true);
       setMessage("");
 
       const payload = {
-        name: form.name,
-        email: form.email,
-        role: form.role
+        name: form.name.trim(),
+        email: form.email.trim().toLowerCase(),
+        role: form.role,
+        isActive: form.isActive
       };
 
-      if (!editingUserId || form.password.trim()) {
+      if (form.password.trim()) {
         payload.password = form.password;
       }
 
-      const url = editingUserId
-        ? `${API_URL}/users/${editingUserId}`
-        : `${API_URL}/users`;
-
-      const method = editingUserId ? "PUT" : "POST";
-
-      const response = await fetch(url, {
-        method,
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload)
-      });
+      const response = await fetch(
+        isEditing ? `${API_URL}/users/${editingUserId}` : `${API_URL}/users`,
+        {
+          method: isEditing ? "PUT" : "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload)
+        }
+      );
 
       const data = await response.json();
 
@@ -161,7 +205,7 @@ export default function UserManagement() {
       }
 
       setMessage(
-        editingUserId
+        isEditing
           ? "Usuario actualizado correctamente."
           : "Usuario creado correctamente."
       );
@@ -176,11 +220,28 @@ export default function UserManagement() {
     }
   };
 
+  const startEdit = (user) => {
+    setEditingUserId(user.id);
+
+    setForm({
+      name: user.name || "",
+      email: user.email || "",
+      password: "",
+      role: user.role || "CAFETERIA",
+      isActive: Boolean(user.isActive)
+    });
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
+  };
+
   const toggleUserStatus = async (user) => {
     const action = user.isActive ? "desactivar" : "activar";
 
     const confirmed = window.confirm(
-      `¿Deseas ${action} el usuario "${user.name}"?`
+      `¿Deseas ${action} la cuenta de "${user.name}"?`
     );
 
     if (!confirmed) return;
@@ -197,10 +258,15 @@ export default function UserManagement() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "No se pudo cambiar el estado");
+        throw new Error(data.message || "No se pudo cambiar el estado del usuario");
       }
 
-      setMessage(data.message);
+      setMessage(
+        user.isActive
+          ? "Usuario desactivado correctamente."
+          : "Usuario activado correctamente."
+      );
+
       await loadUsers();
     } catch (error) {
       console.error(error);
@@ -210,35 +276,44 @@ export default function UserManagement() {
     }
   };
 
+  const selectedRoleDescription = ROLE_OPTIONS.find(
+    (role) => role.value === form.role
+  )?.description;
+
   return (
     <main style={styles.page}>
       <header style={styles.header}>
-        <div>
-          <div style={styles.logo}>USIL</div>
-          <h1 style={styles.title}>Gestión de usuarios</h1>
-          <p style={styles.subtitle}>
-            Administra accesos, roles y estado de los usuarios del sistema.
-          </p>
+        <div style={styles.headerBrand}>
+          <div style={styles.logoBox}>
+            <img src={logoUsilCuadradoImg} alt="USIL" style={styles.logoImage} />
+          </div>
+
+          <div>
+            <h1 style={styles.title}>Gestión de usuarios</h1>
+            <p style={styles.subtitle}>
+              Administra accesos internos, roles y estados de cuenta del sistema.
+            </p>
+          </div>
         </div>
 
         <div style={styles.headerActions}>
-          <a href="/admin/pedidos" style={styles.secondaryButton}>
+          <a href="/admin/pedidos" style={styles.linkButton}>
             Panel pedidos
           </a>
 
-          <a href="/admin/productos" style={styles.secondaryButton}>
+          <a href="/admin/productos" style={styles.linkButton}>
             Productos
           </a>
 
-          <a href="/admin/reportes" style={styles.secondaryButton}>
+          <a href="/admin/reportes" style={styles.linkButton}>
             Reportes
           </a>
 
-          <a href="/" style={styles.secondaryButton}>
-            Ir al kiosko
+          <a href="/" style={styles.linkButton}>
+            Kiosko
           </a>
 
-          <button style={styles.primaryButton} onClick={loadUsers}>
+          <button style={styles.refreshButton} onClick={loadUsers}>
             {loading ? "Cargando..." : "Actualizar"}
           </button>
 
@@ -250,234 +325,364 @@ export default function UserManagement() {
 
       <section style={styles.sessionCard}>
         <div>
-          <strong>Sesión actual</strong>
-          <p>
-            {currentUser?.name || "Usuario"} · {currentUser?.email || "sin correo"} ·{" "}
-            {currentUser?.role || "sin rol"}
-          </p>
+          <strong style={styles.sessionTitle}>Sesión actual</strong>
+          <span style={styles.sessionText}>
+            {currentUser?.name || "Administrador"} · {currentUser?.email}
+          </span>
         </div>
+
+        <span style={styles.sessionBadge}>{formatRole(currentUser?.role)}</span>
       </section>
 
       <section style={styles.metrics}>
-        <MetricCard label="Total usuarios" value={users.length} />
-        <MetricCard label="Administradores" value={adminCount} />
-        <MetricCard label="Cafetería" value={cafeteriaCount} />
-        <MetricCard label="Cocina" value={cocinaCount} />
-        <MetricCard label="Inactivos" value={inactiveCount} />
+        <MetricCard label="Total usuarios" value={metrics.totalUsers} tone="primary" />
+        <MetricCard label="Activos" value={metrics.activeUsers} tone="success" />
+        <MetricCard label="Inactivos" value={metrics.inactiveUsers} tone="danger" />
+        <MetricCard label="Admin" value={metrics.admins} tone="purple" />
+        <MetricCard label="Cafetería" value={metrics.cafeteria} tone="warning" />
+        <MetricCard label="Cocina" value={metrics.cocina} tone="primary" />
       </section>
 
       {message && <p style={styles.message}>{message}</p>}
 
       <section style={styles.layout}>
-        <form
-          ref={formRef}
-          style={{
-            ...styles.formCard,
-            border: editingUserId
-              ? `2px solid ${COLORS.secondary}`
-              : `1px solid ${COLORS.border}`
-          }}
-          onSubmit={handleSubmit}
-        >
+        <section style={styles.formCard}>
           <h2 style={styles.sectionTitle}>
-            {editingUserId ? "Editando usuario" : "Nuevo usuario"}
+            {isEditing ? "Editar usuario" : "Nuevo usuario"}
           </h2>
 
-          {editingUserId && (
-            <div style={styles.editingBox}>
-              Usuario seleccionado: <strong>{editingUserName}</strong>
-            </div>
-          )}
+          <p style={styles.smallText}>
+            {isEditing
+              ? "Actualiza datos, rol o estado de una cuenta existente."
+              : "Crea una cuenta para personal autorizado."}
+          </p>
 
-          <label style={styles.label}>
-            Nombre completo
-            <input
-              style={styles.input}
-              type="text"
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              placeholder="Ejemplo: Usuario Cocina"
-              required
-            />
-          </label>
+          <form style={styles.form} onSubmit={handleSubmit}>
+            <label style={styles.label}>
+              Nombre
+              <input
+                style={styles.input}
+                name="name"
+                value={form.name}
+                placeholder="Ejemplo: Personal de cocina"
+                onChange={handleChange}
+              />
+            </label>
 
-          <label style={styles.label}>
-            Correo
-            <input
-              style={styles.input}
-              type="email"
-              name="email"
-              value={form.email}
-              onChange={handleChange}
-              placeholder="usuario@usil.edu.pe"
-              required
-            />
-          </label>
+            <label style={styles.label}>
+              Correo
+              <input
+                style={styles.input}
+                name="email"
+                type="email"
+                value={form.email}
+                placeholder="usuario@usil.edu.pe"
+                onChange={handleChange}
+              />
+            </label>
 
-          <label style={styles.label}>
-            Contraseña
-            <input
-              style={styles.input}
-              type="password"
-              name="password"
-              value={form.password}
-              onChange={handleChange}
-              placeholder={
-                editingUserId
-                  ? "Dejar vacío para conservar la contraseña"
-                  : "Mínimo 6 caracteres"
-              }
-              required={!editingUserId}
-            />
-          </label>
+            <label style={styles.label}>
+              Contraseña
+              <input
+                style={styles.input}
+                name="password"
+                type="password"
+                value={form.password}
+                placeholder={
+                  isEditing
+                    ? "Dejar vacío para mantener contraseña"
+                    : "Mínimo 6 caracteres"
+                }
+                onChange={handleChange}
+              />
+            </label>
 
-          <label style={styles.label}>
-            Rol
-            <select
-              style={styles.input}
-              name="role"
-              value={form.role}
-              onChange={handleChange}
-            >
-              <option value="ADMIN">ADMIN</option>
-              <option value="CAFETERIA">CAFETERIA</option>
-              <option value="COCINA">COCINA</option>
-            </select>
-          </label>
-
-          <div style={styles.roleInfo}>
-            <strong>Permisos por rol</strong>
-            <span>ADMIN: acceso completo, usuarios, productos, reportes y pedidos.</span>
-            <span>CAFETERIA: pedidos, productos y reportes.</span>
-            <span>COCINA: pedidos y cambios de preparación.</span>
-          </div>
-
-          <div style={styles.formActions}>
-            <button style={styles.saveButton} type="submit" disabled={loading}>
-              {editingUserId ? "Guardar cambios" : "Crear usuario"}
-            </button>
-
-            {editingUserId && (
-              <button
-                style={styles.cancelButton}
-                type="button"
-                onClick={resetForm}
+            <label style={styles.label}>
+              Rol
+              <select
+                style={styles.input}
+                name="role"
+                value={form.role}
+                onChange={handleChange}
               >
-                Cancelar edición
-              </button>
+                {ROLE_OPTIONS.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {selectedRoleDescription && (
+              <div style={styles.roleHelpBox}>
+                <strong>{formatRole(form.role)}</strong>
+                <span>{selectedRoleDescription}</span>
+              </div>
             )}
-          </div>
-        </form>
+
+            <label style={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                name="isActive"
+                checked={form.isActive}
+                onChange={handleChange}
+              />
+              Cuenta activa
+            </label>
+
+            <div style={styles.formActions}>
+              <button style={styles.saveButton} type="submit" disabled={loading}>
+                {loading
+                  ? "Guardando..."
+                  : isEditing
+                    ? "Actualizar usuario"
+                    : "Crear usuario"}
+              </button>
+
+              {isEditing && (
+                <button
+                  style={styles.cancelButton}
+                  type="button"
+                  onClick={resetForm}
+                >
+                  Cancelar edición
+                </button>
+              )}
+            </div>
+          </form>
+        </section>
 
         <section style={styles.usersCard}>
           <div style={styles.usersHeader}>
             <div>
               <h2 style={styles.sectionTitle}>Usuarios registrados</h2>
-              <p style={styles.sectionSubtitle}>
-                Control de accesos administrativos del sistema.
+              <p style={styles.smallText}>
+                Mostrando {filteredUsers.length} de {users.length} usuarios.
               </p>
             </div>
 
-            <select
-              style={styles.filterSelect}
-              value={selectedRole}
-              onChange={(event) => setSelectedRole(event.target.value)}
-            >
-              <option value="TODOS">Todos los roles</option>
-              <option value="ADMIN">ADMIN</option>
-              <option value="CAFETERIA">CAFETERIA</option>
-              <option value="COCINA">COCINA</option>
-            </select>
+            <div style={styles.filters}>
+              <input
+                style={styles.searchInput}
+                value={searchTerm}
+                placeholder="Buscar usuario..."
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+
+              <select
+                style={styles.filterInput}
+                value={selectedRole}
+                onChange={(event) => setSelectedRole(event.target.value)}
+              >
+                <option value="TODOS">Todos los roles</option>
+                <option value="ADMIN">Admin</option>
+                <option value="CAFETERIA">Cafetería</option>
+                <option value="COCINA">Cocina</option>
+              </select>
+
+              <select
+                style={styles.filterInput}
+                value={selectedStatus}
+                onChange={(event) => setSelectedStatus(event.target.value)}
+              >
+                <option value="TODOS">Todos los estados</option>
+                <option value="ACTIVOS">Activos</option>
+                <option value="INACTIVOS">Inactivos</option>
+              </select>
+            </div>
           </div>
 
-          <div style={styles.userList}>
-            {filteredUsers.length === 0 ? (
-              <div style={styles.emptyBox}>No hay usuarios para este filtro.</div>
-            ) : (
-              filteredUsers.map((user) => (
-                <article
-                  key={user.id}
-                  style={{
-                    ...styles.userItem,
-                    opacity: user.isActive ? 1 : 0.55
-                  }}
-                >
-                  <div style={styles.avatar}>
-                    {getInitials(user.name)}
-                  </div>
+          {filteredUsers.length === 0 ? (
+            <div style={styles.emptyBox}>No hay usuarios para mostrar.</div>
+          ) : (
+            <div style={styles.userList}>
+              {filteredUsers.map((user) => {
+                const isCurrentUser = currentUser?.id === user.id;
 
-                  <div style={styles.userMain}>
-                    <div style={styles.userTop}>
-                      <div>
-                        <h3 style={styles.userName}>{user.name}</h3>
-                        <p style={styles.userEmail}>{user.email}</p>
+                return (
+                  <article key={user.id} style={styles.userRow}>
+                    <div style={styles.userMain}>
+                      <div style={getAvatarStyle(user.role)}>
+                        {getInitials(user.name)}
                       </div>
 
-                      <span
-                        style={{
-                          ...styles.statusBadge,
-                          background: user.isActive
-                            ? COLORS.success
-                            : COLORS.danger
-                        }}
-                      >
-                        {user.isActive ? "Activo" : "Inactivo"}
-                      </span>
-                    </div>
+                      <div>
+                        <div style={styles.userTitleLine}>
+                          <h3 style={styles.userName}>{user.name}</h3>
 
-                    <div style={styles.userMeta}>
-                      <span style={styles.roleBadge}>{user.role}</span>
-                      <span>ID: {user.id}</span>
+                          {isCurrentUser && (
+                            <span style={styles.currentBadge}>Tu cuenta</span>
+                          )}
+
+                          <span
+                            style={{
+                              ...styles.statusBadge,
+                              ...(user.isActive
+                                ? styles.activeBadge
+                                : styles.inactiveBadge)
+                            }}
+                          >
+                            {user.isActive ? "Activo" : "Inactivo"}
+                          </span>
+                        </div>
+
+                        <p style={styles.userEmail}>{user.email}</p>
+
+                        <div style={styles.userMeta}>
+                          <span>Rol: {formatRole(user.role)}</span>
+                          <span>Creado: {formatDate(user.createdAt)}</span>
+                          <span>Actualizado: {formatDate(user.updatedAt)}</span>
+                        </div>
+                      </div>
                     </div>
 
                     <div style={styles.userActions}>
                       <button
-                        style={styles.smallButton}
-                        onClick={() => handleEdit(user)}
+                        style={styles.editButton}
+                        onClick={() => startEdit(user)}
                       >
                         Editar
                       </button>
 
                       <button
-                        style={{
-                          ...styles.toggleButton,
-                          background: user.isActive
-                            ? COLORS.danger
-                            : COLORS.success
-                        }}
+                        style={
+                          user.isActive
+                            ? styles.deactivateButton
+                            : styles.activateButton
+                        }
                         onClick={() => toggleUserStatus(user)}
                       >
                         {user.isActive ? "Desactivar" : "Activar"}
                       </button>
                     </div>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </section>
       </section>
     </main>
   );
 }
 
-function MetricCard({ label, value }) {
+function MetricCard({ label, value, tone = "primary" }) {
+  const toneStyle = {
+    primary: {
+      background: COLORS.white,
+      color: COLORS.primary,
+      border: COLORS.border
+    },
+    success: {
+      background: COLORS.successLight,
+      color: COLORS.success,
+      border: "#BFE8CE"
+    },
+    danger: {
+      background: COLORS.dangerLight,
+      color: COLORS.danger,
+      border: "#FFC7D0"
+    },
+    warning: {
+      background: COLORS.warningLight,
+      color: "#8A6200",
+      border: "#F5D36B"
+    },
+    purple: {
+      background: COLORS.purpleLight,
+      color: COLORS.purple,
+      border: "#EAC6F1"
+    }
+  };
+
+  const selectedTone = toneStyle[tone] || toneStyle.primary;
+
   return (
-    <article style={styles.metricCard}>
-      <span style={styles.metricLabel}>{label}</span>
-      <strong style={styles.metricValue}>{value}</strong>
+    <article
+      style={{
+        ...styles.metricCard,
+        background: selectedTone.background,
+        color: selectedTone.color,
+        border: `1px solid ${selectedTone.border}`
+      }}
+    >
+      <span>{label}</span>
+      <strong>{value}</strong>
     </article>
   );
 }
 
-function getInitials(name) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
-    .join("");
+function getAvatarStyle(role) {
+  const base = {
+    ...styles.avatar
+  };
+
+  if (role === "ADMIN") {
+    return {
+      ...base,
+      background: COLORS.purpleLight,
+      color: COLORS.purple,
+      border: "1px solid #EAC6F1"
+    };
+  }
+
+  if (role === "CAFETERIA") {
+    return {
+      ...base,
+      background: COLORS.warningLight,
+      color: "#8A6200",
+      border: "1px solid #F5D36B"
+    };
+  }
+
+  if (role === "COCINA") {
+    return {
+      ...base,
+      background: COLORS.successLight,
+      color: COLORS.success,
+      border: "1px solid #BFE8CE"
+    };
+  }
+
+  return base;
+}
+
+function getInitials(name = "") {
+  const parts = name.trim().split(" ").filter(Boolean);
+
+  if (parts.length === 0) return "U";
+
+  if (parts.length === 1) {
+    return parts[0].charAt(0).toUpperCase();
+  }
+
+  return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
+}
+
+function formatRole(role) {
+  const labels = {
+    ADMIN: "Administrador",
+    CAFETERIA: "Cafetería",
+    COCINA: "Cocina"
+  };
+
+  return labels[role] || role || "Sin rol";
+}
+
+function formatDate(value) {
+  if (!value) return "Sin fecha";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Sin fecha";
+  }
+
+  return date.toLocaleDateString("es-PE", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
 }
 
 const styles = {
@@ -485,8 +690,9 @@ const styles = {
     minHeight: "100vh",
     background: COLORS.background,
     fontFamily: "Arial, sans-serif",
+    color: COLORS.text,
     padding: "32px",
-    color: COLORS.text
+    boxSizing: "border-box"
   },
   header: {
     background: COLORS.white,
@@ -496,99 +702,126 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: "24px",
     boxShadow: "0 12px 32px rgba(11, 46, 107, 0.08)",
-    marginBottom: "24px"
+    marginBottom: "22px",
+    flexWrap: "wrap",
+    boxSizing: "border-box"
   },
-  logo: {
-    width: "74px",
-    height: "74px",
-    borderRadius: "50%",
-    background: COLORS.primary,
-    color: COLORS.white,
+  headerBrand: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
-    fontSize: "22px",
-    fontWeight: "900",
-    marginBottom: "14px"
+    gap: "18px"
+  },
+  logoBox: {
+    width: "78px",
+    height: "78px",
+    borderRadius: "22px",
+    overflow: "hidden",
+    background: COLORS.primary,
+    border: `1px solid ${COLORS.border}`,
+    boxShadow: "0 10px 24px rgba(11, 46, 107, 0.13)",
+    flexShrink: 0
+  },
+  logoImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block"
   },
   title: {
     margin: 0,
     color: COLORS.primary,
-    fontSize: "46px"
+    fontSize: "42px"
   },
   subtitle: {
     margin: "8px 0 0",
     color: COLORS.textSoft,
-    fontSize: "18px"
+    fontSize: "17px"
   },
   headerActions: {
     display: "flex",
-    gap: "14px",
+    gap: "12px",
     alignItems: "center",
     flexWrap: "wrap",
     justifyContent: "flex-end"
   },
-  primaryButton: {
-    background: COLORS.primary,
-    color: COLORS.white,
-    border: "none",
-    borderRadius: "999px",
-    padding: "14px 24px",
-    fontWeight: "800",
-    fontSize: "16px",
-    cursor: "pointer"
-  },
-  secondaryButton: {
-    textDecoration: "none",
+  linkButton: {
     background: COLORS.primaryLight,
     color: COLORS.primary,
     border: `1px solid ${COLORS.border}`,
     borderRadius: "999px",
-    padding: "14px 24px",
-    fontWeight: "800",
-    fontSize: "16px"
+    padding: "13px 20px",
+    fontWeight: "900",
+    fontSize: "15px",
+    textDecoration: "none",
+    boxSizing: "border-box"
+  },
+  refreshButton: {
+    background: COLORS.primary,
+    color: COLORS.white,
+    border: "none",
+    borderRadius: "999px",
+    padding: "13px 20px",
+    fontWeight: "900",
+    fontSize: "15px",
+    cursor: "pointer",
+    boxSizing: "border-box"
   },
   logoutButton: {
     background: COLORS.danger,
     color: COLORS.white,
     border: "none",
     borderRadius: "999px",
-    padding: "14px 24px",
-    fontWeight: "800",
-    fontSize: "16px",
-    cursor: "pointer"
+    padding: "13px 20px",
+    fontWeight: "900",
+    fontSize: "15px",
+    cursor: "pointer",
+    boxSizing: "border-box"
   },
   sessionCard: {
-    background: COLORS.primaryLight,
+    background: COLORS.white,
+    borderRadius: "24px",
     border: `1px solid ${COLORS.border}`,
-    borderRadius: "22px",
     padding: "18px 22px",
+    marginBottom: "20px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "16px",
+    flexWrap: "wrap",
+    boxShadow: "0 10px 26px rgba(11, 46, 107, 0.06)",
+    boxSizing: "border-box"
+  },
+  sessionTitle: {
+    display: "block",
     color: COLORS.primary,
-    marginBottom: "22px"
+    fontSize: "17px",
+    marginBottom: "4px"
+  },
+  sessionText: {
+    color: COLORS.textSoft
+  },
+  sessionBadge: {
+    background: COLORS.primary,
+    color: COLORS.white,
+    borderRadius: "999px",
+    padding: "11px 18px",
+    fontWeight: "900"
   },
   metrics: {
     display: "grid",
-    gridTemplateColumns: "repeat(5, 1fr)",
-    gap: "18px",
-    marginBottom: "22px"
+    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+    gap: "14px",
+    marginBottom: "20px"
   },
   metricCard: {
-    background: COLORS.white,
     borderRadius: "22px",
-    border: `1px solid ${COLORS.border}`,
-    padding: "22px",
-    boxShadow: "0 10px 26px rgba(11, 46, 107, 0.06)"
-  },
-  metricLabel: {
-    display: "block",
-    color: COLORS.textSoft,
-    fontSize: "15px",
-    marginBottom: "10px"
-  },
-  metricValue: {
-    color: COLORS.primary,
-    fontSize: "32px"
+    padding: "18px",
+    display: "grid",
+    gap: "8px",
+    boxShadow: "0 10px 26px rgba(11, 46, 107, 0.06)",
+    boxSizing: "border-box"
   },
   message: {
     background: COLORS.primaryLight,
@@ -597,211 +830,284 @@ const styles = {
     borderRadius: "18px",
     padding: "14px 18px",
     fontWeight: "800",
-    marginBottom: "20px"
+    marginBottom: "20px",
+    boxSizing: "border-box"
   },
   layout: {
     display: "grid",
-    gridTemplateColumns: "420px 1fr",
-    gap: "22px",
-    alignItems: "start"
+    gridTemplateColumns: "420px minmax(0, 1fr)",
+    gap: "24px",
+    alignItems: "start",
+    width: "100%",
+    boxSizing: "border-box"
   },
   formCard: {
     background: COLORS.white,
-    borderRadius: "24px",
-    padding: "24px",
-    boxShadow: "0 10px 26px rgba(11, 46, 107, 0.06)",
-    display: "grid",
-    gap: "16px"
-  },
-  editingBox: {
-    background: COLORS.primaryLight,
-    color: COLORS.primary,
+    borderRadius: "28px",
     border: `1px solid ${COLORS.border}`,
-    borderRadius: "16px",
-    padding: "12px 14px",
-    fontSize: "15px"
+    padding: "24px",
+    boxShadow: "0 12px 32px rgba(11, 46, 107, 0.08)",
+    position: "sticky",
+    top: "24px",
+    width: "100%",
+    maxWidth: "420px",
+    overflow: "hidden",
+    boxSizing: "border-box"
+  },
+  usersCard: {
+    background: COLORS.white,
+    borderRadius: "28px",
+    border: `1px solid ${COLORS.border}`,
+    padding: "24px",
+    boxShadow: "0 12px 32px rgba(11, 46, 107, 0.08)",
+    minWidth: 0,
+    boxSizing: "border-box"
   },
   sectionTitle: {
     margin: 0,
     color: COLORS.primary,
     fontSize: "28px"
   },
-  sectionSubtitle: {
-    margin: "6px 0 0",
+  smallText: {
+    margin: "7px 0 0",
     color: COLORS.textSoft,
-    fontSize: "15px"
+    fontSize: "14px",
+    lineHeight: 1.4
+  },
+  form: {
+    display: "grid",
+    gap: "15px",
+    marginTop: "18px",
+    width: "100%",
+    boxSizing: "border-box"
   },
   label: {
     display: "grid",
     gap: "8px",
     color: COLORS.text,
-    fontSize: "15px",
-    fontWeight: "800"
+    fontWeight: "900",
+    width: "100%",
+    minWidth: 0,
+    boxSizing: "border-box"
   },
   input: {
     width: "100%",
-    boxSizing: "border-box",
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: "14px",
-    padding: "13px 14px",
-    fontSize: "16px",
-    color: COLORS.text,
-    background: COLORS.white,
-    outline: "none"
-  },
-  roleInfo: {
-    background: COLORS.primaryLight,
-    color: COLORS.primary,
+    maxWidth: "100%",
+    minWidth: 0,
     border: `1px solid ${COLORS.border}`,
     borderRadius: "16px",
+    padding: "13px 14px",
+    fontSize: "15px",
+    outline: "none",
+    color: COLORS.text,
+    background: COLORS.white,
+    boxSizing: "border-box"
+  },
+  roleHelpBox: {
+    background: COLORS.primaryLight,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: "18px",
     padding: "14px",
+    color: COLORS.primary,
     display: "grid",
-    gap: "6px",
-    fontSize: "14px"
+    gap: "5px",
+    boxSizing: "border-box"
+  },
+  checkboxRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    color: COLORS.text,
+    fontWeight: "900",
+    background: COLORS.background,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: "16px",
+    padding: "13px 14px",
+    boxSizing: "border-box"
   },
   formActions: {
     display: "grid",
-    gap: "12px"
+    gap: "10px",
+    width: "100%",
+    boxSizing: "border-box"
   },
   saveButton: {
-    background: COLORS.success,
+    width: "100%",
+    background: COLORS.primary,
     color: COLORS.white,
     border: "none",
-    borderRadius: "16px",
-    padding: "16px",
-    fontSize: "18px",
+    borderRadius: "999px",
+    padding: "15px 22px",
     fontWeight: "900",
-    cursor: "pointer"
+    fontSize: "16px",
+    cursor: "pointer",
+    boxSizing: "border-box"
   },
   cancelButton: {
-    background: COLORS.white,
+    width: "100%",
+    background: COLORS.primaryLight,
     color: COLORS.primary,
     border: `1px solid ${COLORS.border}`,
-    borderRadius: "16px",
-    padding: "14px",
-    fontSize: "16px",
+    borderRadius: "999px",
+    padding: "14px 22px",
     fontWeight: "900",
-    cursor: "pointer"
-  },
-  usersCard: {
-    background: COLORS.white,
-    borderRadius: "24px",
-    border: `1px solid ${COLORS.border}`,
-    padding: "24px",
-    boxShadow: "0 10px 26px rgba(11, 46, 107, 0.06)"
+    fontSize: "15px",
+    cursor: "pointer",
+    boxSizing: "border-box"
   },
   usersHeader: {
     display: "flex",
     justifyContent: "space-between",
-    gap: "20px",
+    gap: "18px",
     alignItems: "center",
-    marginBottom: "20px"
+    marginBottom: "20px",
+    flexWrap: "wrap"
   },
-  filterSelect: {
-    minWidth: "220px",
+  filters: {
+    display: "flex",
+    gap: "12px",
+    flexWrap: "wrap"
+  },
+  searchInput: {
     border: `1px solid ${COLORS.border}`,
     borderRadius: "999px",
-    padding: "13px 16px",
-    color: COLORS.primary,
+    padding: "12px 16px",
     fontSize: "15px",
     fontWeight: "800",
-    background: COLORS.white
+    color: COLORS.primary,
+    background: COLORS.white,
+    minWidth: "220px",
+    boxSizing: "border-box"
+  },
+  filterInput: {
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: "999px",
+    padding: "12px 16px",
+    fontSize: "15px",
+    fontWeight: "800",
+    color: COLORS.primary,
+    background: COLORS.white,
+    boxSizing: "border-box"
+  },
+  emptyBox: {
+    background: COLORS.background,
+    border: `1px dashed ${COLORS.border}`,
+    borderRadius: "22px",
+    padding: "30px",
+    textAlign: "center",
+    color: COLORS.textSoft,
+    fontWeight: "800",
+    boxSizing: "border-box"
   },
   userList: {
     display: "grid",
     gap: "14px"
   },
-  emptyBox: {
-    background: COLORS.background,
-    border: `1px dashed ${COLORS.border}`,
-    borderRadius: "18px",
-    padding: "28px",
-    color: COLORS.textSoft,
-    textAlign: "center"
-  },
-  userItem: {
+  userRow: {
     background: COLORS.background,
     border: `1px solid ${COLORS.border}`,
-    borderRadius: "20px",
-    padding: "16px",
+    borderRadius: "22px",
+    padding: "18px",
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) auto",
+    gap: "16px",
+    alignItems: "center",
+    boxSizing: "border-box"
+  },
+  userMain: {
     display: "flex",
-    gap: "16px"
+    gap: "16px",
+    alignItems: "center",
+    minWidth: 0
   },
   avatar: {
-    width: "76px",
-    height: "76px",
-    borderRadius: "50%",
-    background: COLORS.primary,
-    color: COLORS.white,
+    width: "62px",
+    height: "62px",
+    borderRadius: "20px",
+    background: COLORS.primaryLight,
+    color: COLORS.primary,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: "24px",
+    fontSize: "20px",
     fontWeight: "900",
     flexShrink: 0
   },
-  userMain: {
-    flex: 1,
-    display: "grid",
-    gap: "12px"
-  },
-  userTop: {
+  userTitleLine: {
     display: "flex",
-    justifyContent: "space-between",
-    gap: "14px"
+    alignItems: "center",
+    gap: "10px",
+    flexWrap: "wrap"
   },
   userName: {
-    margin: "0 0 6px",
-    color: COLORS.text,
-    fontSize: "22px"
+    margin: 0,
+    color: COLORS.primary,
+    fontSize: "21px"
   },
   userEmail: {
-    margin: 0,
+    margin: "6px 0 10px",
     color: COLORS.textSoft,
-    fontSize: "15px"
-  },
-  statusBadge: {
-    color: COLORS.white,
-    borderRadius: "999px",
-    padding: "7px 12px",
-    fontWeight: "900",
-    fontSize: "13px",
-    height: "fit-content"
+    lineHeight: 1.4
   },
   userMeta: {
     display: "flex",
+    gap: "9px",
     flexWrap: "wrap",
-    gap: "10px",
-    alignItems: "center",
-    color: COLORS.primary,
-    fontSize: "15px"
+    color: COLORS.textSoft,
+    fontSize: "13px",
+    fontWeight: "800"
   },
-  roleBadge: {
+  currentBadge: {
     background: COLORS.primaryLight,
     color: COLORS.primary,
     borderRadius: "999px",
-    padding: "7px 12px",
+    padding: "5px 10px",
+    fontSize: "12px",
     fontWeight: "900"
   },
-  userActions: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "10px"
-  },
-  smallButton: {
-    border: `1px solid ${COLORS.border}`,
-    background: COLORS.white,
-    color: COLORS.primary,
+  statusBadge: {
     borderRadius: "999px",
-    padding: "10px 16px",
-    fontWeight: "800",
+    padding: "5px 10px",
+    fontSize: "12px",
+    fontWeight: "900"
+  },
+  activeBadge: {
+    background: COLORS.successLight,
+    color: COLORS.success
+  },
+  inactiveBadge: {
+    background: COLORS.dangerLight,
+    color: COLORS.danger
+  },
+  userActions: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(120px, 1fr))",
+    gap: "9px"
+  },
+  editButton: {
+    background: COLORS.primary,
+    color: COLORS.white,
+    border: "none",
+    borderRadius: "14px",
+    padding: "11px 14px",
+    fontWeight: "900",
     cursor: "pointer"
   },
-  toggleButton: {
-    border: "none",
+  activateButton: {
+    background: COLORS.success,
     color: COLORS.white,
-    borderRadius: "999px",
-    padding: "10px 16px",
+    border: "none",
+    borderRadius: "14px",
+    padding: "11px 14px",
+    fontWeight: "900",
+    cursor: "pointer"
+  },
+  deactivateButton: {
+    background: COLORS.dangerLight,
+    color: COLORS.danger,
+    border: "none",
+    borderRadius: "14px",
+    padding: "11px 14px",
     fontWeight: "900",
     cursor: "pointer"
   }

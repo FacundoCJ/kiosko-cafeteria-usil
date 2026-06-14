@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 
+import logoUsilCuadradoImg from "../assets/branding/logo-usil-cuadrado.png";
+import yapeImg from "../assets/pagos/yape.png";
+import plinImg from "../assets/pagos/plin.png";
+import qrPagoImg from "../assets/pagos/qr-pago.png";
+
 const API_URL = "/api";
 
 const COLORS = {
@@ -11,7 +16,32 @@ const COLORS = {
   textSoft: "#5B6780",
   border: "#D7E1F2",
   success: "#1F9D55",
-  danger: "#D72638"
+  danger: "#D72638",
+  yape: "#8B0AAE",
+  plin: "#00CFCB"
+};
+
+const PAYMENT_ASSETS = {
+  yape: {
+    label: "Yape",
+    image: yapeImg
+  },
+  plin: {
+    label: "Plin",
+    image: plinImg
+  },
+  qr: {
+    label: "QR",
+    image: qrPagoImg
+  },
+  tarjeta: {
+    label: "Tarjeta",
+    icon: "💳"
+  },
+  pendiente: {
+    label: "Pendiente",
+    icon: "⏳"
+  }
 };
 
 export default function Ticket() {
@@ -68,8 +98,12 @@ export default function Ticket() {
     return () => clearInterval(countdownInterval);
   }, [ticket]);
 
+  const paymentAsset = ticket
+    ? PAYMENT_ASSETS[ticket.paymentMethod] || PAYMENT_ASSETS.pendiente
+    : null;
+
   return (
-    <main style={styles.page}>
+    <main style={styles.page} className="ticket-page">
       <style>
         {`
           @media print {
@@ -97,6 +131,11 @@ export default function Ticket() {
 
             .ticket-box {
               border: 1px solid #000000 !important;
+              box-shadow: none !important;
+            }
+
+            .ticket-logo {
+              box-shadow: none !important;
             }
 
             @page {
@@ -109,7 +148,9 @@ export default function Ticket() {
 
       <section style={styles.card} className="ticket-card">
         <div style={styles.header}>
-          <div style={styles.logo}>USIL</div>
+          <div style={styles.logoBox} className="ticket-logo">
+            <img src={logoUsilCuadradoImg} alt="USIL" style={styles.logoImage} />
+          </div>
 
           <div>
             <h1 style={styles.title}>Comprobante de pedido</h1>
@@ -130,24 +171,36 @@ export default function Ticket() {
             </div>
 
             <div style={styles.infoGrid}>
-              <div>
+              <div style={styles.infoItem}>
                 <span>Fecha</span>
                 <strong>{formatDate(ticket.createdAt)}</strong>
               </div>
 
-              <div>
+              <div style={styles.infoItem}>
                 <span>Hora</span>
                 <strong>{formatTime(ticket.createdAt)}</strong>
               </div>
 
-              <div>
-                <span>Método de pago</span>
-                <strong>{formatMethod(ticket.paymentMethod)}</strong>
-              </div>
-
-              <div>
+              <div style={styles.infoItem}>
                 <span>Estado</span>
                 <strong>{formatStatus(ticket.status)}</strong>
+              </div>
+
+              <div style={styles.paymentMiniBox}>
+                {paymentAsset?.image ? (
+                  <img
+                    src={paymentAsset.image}
+                    alt={paymentAsset.label}
+                    style={styles.paymentMiniImage}
+                  />
+                ) : (
+                  <span style={styles.paymentMiniIcon}>{paymentAsset?.icon}</span>
+                )}
+
+                <div>
+                  <span>Método de pago</span>
+                  <strong>{paymentAsset?.label || formatMethod(ticket.paymentMethod)}</strong>
+                </div>
               </div>
             </div>
 
@@ -256,7 +309,7 @@ const styles = {
   },
   card: {
     width: "100%",
-    maxWidth: "720px",
+    maxWidth: "760px",
     background: COLORS.white,
     borderRadius: "32px",
     border: `1px solid ${COLORS.border}`,
@@ -269,17 +322,21 @@ const styles = {
     alignItems: "center",
     marginBottom: "28px"
   },
-  logo: {
-    width: "82px",
-    height: "82px",
-    borderRadius: "50%",
+  logoBox: {
+    width: "86px",
+    height: "86px",
+    borderRadius: "22px",
+    overflow: "hidden",
     background: COLORS.primary,
-    color: COLORS.white,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "24px",
-    fontWeight: "900"
+    border: `1px solid ${COLORS.border}`,
+    boxShadow: "0 10px 24px rgba(11, 46, 107, 0.13)",
+    flexShrink: 0
+  },
+  logoImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block"
   },
   title: {
     margin: 0,
@@ -295,7 +352,8 @@ const styles = {
     border: `1px solid ${COLORS.border}`,
     borderRadius: "24px",
     padding: "24px",
-    background: "#FFFFFF"
+    background: "#FFFFFF",
+    boxShadow: "0 10px 28px rgba(11, 46, 107, 0.06)"
   },
   ticketTop: {
     background: COLORS.primaryLight,
@@ -311,6 +369,40 @@ const styles = {
     gridTemplateColumns: "repeat(2, 1fr)",
     gap: "14px",
     marginTop: "18px"
+  },
+  infoItem: {
+    display: "grid",
+    gap: "5px",
+    background: COLORS.background,
+    borderRadius: "16px",
+    padding: "14px"
+  },
+  paymentMiniBox: {
+    display: "flex",
+    gap: "12px",
+    alignItems: "center",
+    background: COLORS.background,
+    borderRadius: "16px",
+    padding: "14px"
+  },
+  paymentMiniImage: {
+    width: "46px",
+    height: "46px",
+    objectFit: "contain",
+    borderRadius: "14px",
+    background: COLORS.white,
+    flexShrink: 0
+  },
+  paymentMiniIcon: {
+    width: "46px",
+    height: "46px",
+    borderRadius: "14px",
+    background: COLORS.white,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "25px",
+    flexShrink: 0
   },
   divider: {
     height: "1px",

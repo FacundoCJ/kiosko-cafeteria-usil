@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import logoUsilCuadradoImg from "../assets/branding/logo-usil-cuadrado.png";
 import { saveSession } from "../services/auth.service.js";
 
 const API_URL = "/api";
@@ -6,12 +7,12 @@ const API_URL = "/api";
 const COLORS = {
   primary: "#0B2E6B",
   primaryLight: "#EAF1FF",
-  secondary: "#1E4FA8",
   white: "#FFFFFF",
   background: "#F5F7FB",
   text: "#162033",
   textSoft: "#5B6780",
   border: "#D7E1F2",
+  success: "#1F9D55",
   danger: "#D72638"
 };
 
@@ -21,8 +22,32 @@ export default function Login() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const redirectByRole = (role) => {
+    if (role === "ADMIN") {
+      window.location.href = "/admin";
+      return;
+    }
+
+    if (role === "CAFETERIA") {
+      window.location.href = "/admin/pedidos";
+      return;
+    }
+
+    if (role === "COCINA") {
+      window.location.href = "/admin/pedidos";
+      return;
+    }
+
+    window.location.href = "/";
+  };
+
   const handleLogin = async (event) => {
     event.preventDefault();
+
+    if (!email.trim() || !password.trim()) {
+      setMessage("Ingresa correo y contraseña.");
+      return;
+    }
 
     try {
       setLoading(true);
@@ -34,7 +59,7 @@ export default function Login() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          email,
+          email: email.trim(),
           password
         })
       });
@@ -46,15 +71,7 @@ export default function Login() {
       }
 
       saveSession(data.token, data.user);
-      if (data.user.role === "ADMIN") {
-  window.location.href = "/admin";
-} else if (data.user.role === "CAFETERIA") {
-  window.location.href = "/admin/pedidos";
-} else if (data.user.role === "COCINA") {
-  window.location.href = "/admin/pedidos";
-} else {
-  window.location.href = "/";
-}
+      redirectByRole(data.user.role);
     } catch (error) {
       console.error(error);
       setMessage(error.message || "Error al iniciar sesión.");
@@ -66,16 +83,18 @@ export default function Login() {
   return (
     <main style={styles.page}>
       <section style={styles.card}>
-        <div style={styles.brandBox}>
-          <div style={styles.logo}>USIL</div>
-
-          <div>
-            <h1 style={styles.title}>Acceso administrativo</h1>
-            <p style={styles.subtitle}>
-              Sistema de Kiosko Táctil para Autoservicio - Cafetería USIL
-            </p>
-          </div>
+        <div style={styles.logoBox}>
+          <img src={logoUsilCuadradoImg} alt="USIL" style={styles.logoImage} />
         </div>
+
+        <h1 style={styles.title}>Acceso interno</h1>
+
+        <p style={styles.subtitle}>
+          Ingresa con una cuenta autorizada para administrar pedidos, productos,
+          reportes o usuarios del kiosko.
+        </p>
+
+        {message && <p style={styles.error}>{message}</p>}
 
         <form style={styles.form} onSubmit={handleLogin}>
           <label style={styles.label}>
@@ -84,9 +103,8 @@ export default function Login() {
               style={styles.input}
               type="email"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
               placeholder="admin@usil.edu.pe"
-              required
+              onChange={(event) => setEmail(event.target.value)}
             />
           </label>
 
@@ -96,28 +114,26 @@ export default function Login() {
               style={styles.input}
               type="password"
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
               placeholder="Ingresa tu contraseña"
-              required
+              onChange={(event) => setPassword(event.target.value)}
             />
           </label>
 
-          {message && <p style={styles.error}>{message}</p>}
-
-          <button style={styles.button} type="submit" disabled={loading}>
-            {loading ? "Ingresando..." : "Ingresar al panel"}
+          <button style={styles.loginButton} type="submit" disabled={loading}>
+            {loading ? "Validando acceso..." : "Iniciar sesión"}
           </button>
-
-          <a href="/" style={styles.kioskLink}>
-            Volver al kiosko
-          </a>
         </form>
 
-        <div style={styles.helperBox}>
-          <strong>Usuario de prueba</strong>
-          <span>Correo: admin@usil.edu.pe</span>
-          <span>Contraseña: Admin123</span>
+        <div style={styles.helpBox}>
+          <strong>Roles del sistema</strong>
+          <span>ADMIN: acceso completo.</span>
+          <span>CAFETERIA: pedidos, productos y reportes.</span>
+          <span>COCINA: pedidos y preparación.</span>
         </div>
+
+        <a href="/" style={styles.publicLink}>
+          Volver al kiosko público
+        </a>
       </section>
     </main>
   );
@@ -126,7 +142,7 @@ export default function Login() {
 const styles = {
   page: {
     minHeight: "100vh",
-    background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.secondary} 45%, ${COLORS.primaryLight} 45%, ${COLORS.background} 100%)`,
+    background: COLORS.background,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -138,95 +154,100 @@ const styles = {
     width: "100%",
     maxWidth: "520px",
     background: COLORS.white,
-    borderRadius: "32px",
+    borderRadius: "34px",
     border: `1px solid ${COLORS.border}`,
-    padding: "34px",
-    boxShadow: "0 26px 70px rgba(11, 46, 107, 0.24)"
+    padding: "38px",
+    boxShadow: "0 24px 70px rgba(11, 46, 107, 0.16)"
   },
-  brandBox: {
-    display: "flex",
-    gap: "18px",
-    alignItems: "center",
-    marginBottom: "28px"
-  },
-  logo: {
-    width: "82px",
-    height: "82px",
-    borderRadius: "50%",
+  logoBox: {
+    width: "112px",
+    height: "112px",
+    borderRadius: "26px",
+    overflow: "hidden",
     background: COLORS.primary,
-    color: COLORS.white,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "24px",
-    fontWeight: "900",
-    flexShrink: 0
+    border: `1px solid ${COLORS.border}`,
+    boxShadow: "0 14px 32px rgba(11, 46, 107, 0.16)",
+    margin: "0 auto 22px"
+  },
+  logoImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block"
   },
   title: {
     margin: 0,
     color: COLORS.primary,
-    fontSize: "34px",
-    lineHeight: 1
+    textAlign: "center",
+    fontSize: "42px"
   },
   subtitle: {
-    margin: "10px 0 0",
+    margin: "12px 0 26px",
     color: COLORS.textSoft,
-    fontSize: "15px",
-    lineHeight: 1.4
+    textAlign: "center",
+    fontSize: "17px",
+    lineHeight: 1.5
   },
   form: {
     display: "grid",
-    gap: "18px"
+    gap: "16px"
   },
   label: {
     display: "grid",
     gap: "8px",
-    fontWeight: "800",
-    color: COLORS.text
+    color: COLORS.text,
+    fontWeight: "900"
   },
   input: {
     border: `1px solid ${COLORS.border}`,
-    borderRadius: "16px",
+    borderRadius: "18px",
     padding: "15px 16px",
-    fontSize: "17px",
+    fontSize: "16px",
     outline: "none",
     color: COLORS.text,
     background: COLORS.white
   },
-  button: {
+  loginButton: {
+    marginTop: "6px",
     background: COLORS.primary,
     color: COLORS.white,
     border: "none",
-    borderRadius: "18px",
-    padding: "17px",
-    fontSize: "18px",
+    borderRadius: "999px",
+    padding: "16px 24px",
+    fontSize: "17px",
     fontWeight: "900",
     cursor: "pointer"
   },
-  kioskLink: {
-    textAlign: "center",
-    color: COLORS.primary,
-    textDecoration: "none",
-    fontWeight: "800"
-  },
-  error: {
-    margin: 0,
-    background: "#FFE9EC",
-    color: COLORS.danger,
-    border: "1px solid #FFC8D0",
-    borderRadius: "14px",
-    padding: "12px 14px",
-    fontWeight: "800"
-  },
-  helperBox: {
-    marginTop: "24px",
+  helpBox: {
+    marginTop: "22px",
     background: COLORS.primaryLight,
     border: `1px solid ${COLORS.border}`,
-    borderRadius: "18px",
+    borderRadius: "20px",
     padding: "16px",
     display: "grid",
     gap: "6px",
     color: COLORS.primary,
     fontSize: "14px"
+  },
+  publicLink: {
+    display: "block",
+    marginTop: "18px",
+    textAlign: "center",
+    background: COLORS.white,
+    color: COLORS.primary,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: "999px",
+    padding: "14px 20px",
+    fontWeight: "900",
+    textDecoration: "none"
+  },
+  error: {
+    background: "#FFE9EC",
+    color: COLORS.danger,
+    borderRadius: "16px",
+    padding: "14px",
+    fontWeight: "800",
+    marginBottom: "16px",
+    textAlign: "center"
   }
 };

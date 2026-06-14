@@ -1,18 +1,21 @@
 import React, { useEffect, useState } from "react";
+import logoUsilCuadradoImg from "../assets/branding/logo-usil-cuadrado.png";
 
 const API_URL = "/api";
 
 const COLORS = {
   primary: "#0B2E6B",
   primaryLight: "#EAF1FF",
-  secondary: "#1E4FA8",
   white: "#FFFFFF",
   background: "#F5F7FB",
   text: "#162033",
   textSoft: "#5B6780",
   border: "#D7E1F2",
   success: "#1F9D55",
-  warning: "#F4B400"
+  successLight: "#E9F8EF",
+  warning: "#F4B400",
+  warningLight: "#FFF7DF",
+  danger: "#D72638"
 };
 
 export default function OrderDisplay() {
@@ -36,6 +39,7 @@ export default function OrderDisplay() {
       setReadyOrders(data.ready || []);
 
       const now = new Date();
+
       setLastUpdated(
         now.toLocaleTimeString("es-PE", {
           hour: "2-digit",
@@ -63,19 +67,33 @@ export default function OrderDisplay() {
     <main style={styles.page}>
       <header style={styles.header}>
         <div style={styles.brand}>
-          <div style={styles.logo}>USIL</div>
+          <div style={styles.logoBox}>
+            <img src={logoUsilCuadradoImg} alt="USIL" style={styles.logoImage} />
+          </div>
 
           <div>
-            <h1 style={styles.title}>Pantalla de pedidos</h1>
+            <h1 style={styles.title}>Pantalla de retiro</h1>
             <p style={styles.subtitle}>
-              Revisa tu número de pedido y acércate cuando esté listo.
+              Revisa tu número de pedido y acércate cuando aparezca como listo.
             </p>
           </div>
         </div>
 
-        <div style={styles.clockBox}>
-          <span>Actualizado</span>
-          <strong>{lastUpdated || "--:--:--"}</strong>
+        <div style={styles.statusPanel}>
+          <div style={styles.statusItem}>
+            <span>Preparando</span>
+            <strong>{preparingOrders.length}</strong>
+          </div>
+
+          <div style={styles.statusItemReady}>
+            <span>Listos</span>
+            <strong>{readyOrders.length}</strong>
+          </div>
+
+          <div style={styles.clockBox}>
+            <span>Actualizado</span>
+            <strong>{lastUpdated || "--:--:--"}</strong>
+          </div>
         </div>
       </header>
 
@@ -84,7 +102,13 @@ export default function OrderDisplay() {
       <section style={styles.columns}>
         <section style={styles.column}>
           <div style={styles.columnHeader}>
-            <h2 style={styles.preparingTitle}>En preparación</h2>
+            <div>
+              <h2 style={styles.preparingTitle}>En preparación</h2>
+              <p style={styles.columnSubtitle}>
+                Pedidos pagados o en proceso de cocina.
+              </p>
+            </div>
+
             <span style={styles.countBadge}>{preparingOrders.length}</span>
           </div>
 
@@ -108,7 +132,13 @@ export default function OrderDisplay() {
 
         <section style={styles.columnReady}>
           <div style={styles.columnHeader}>
-            <h2 style={styles.readyTitle}>Listos para recoger</h2>
+            <div>
+              <h2 style={styles.readyTitle}>Listos para recoger</h2>
+              <p style={styles.columnSubtitle}>
+                Si tu número aparece aquí, acércate al módulo.
+              </p>
+            </div>
+
             <span style={styles.readyCountBadge}>{readyOrders.length}</span>
           </div>
 
@@ -164,6 +194,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: "26px",
     marginBottom: "28px",
     boxShadow: "0 14px 38px rgba(11, 46, 107, 0.08)"
   },
@@ -172,18 +203,21 @@ const styles = {
     gap: "22px",
     alignItems: "center"
   },
-  logo: {
-    width: "92px",
-    height: "92px",
-    borderRadius: "50%",
+  logoBox: {
+    width: "96px",
+    height: "96px",
+    borderRadius: "24px",
+    overflow: "hidden",
     background: COLORS.primary,
-    color: COLORS.white,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "28px",
-    fontWeight: "900",
+    border: `1px solid ${COLORS.border}`,
+    boxShadow: "0 12px 28px rgba(11, 46, 107, 0.15)",
     flexShrink: 0
+  },
+  logoImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block"
   },
   title: {
     margin: 0,
@@ -194,22 +228,53 @@ const styles = {
   subtitle: {
     margin: "10px 0 0",
     color: COLORS.textSoft,
-    fontSize: "22px"
+    fontSize: "22px",
+    lineHeight: 1.35
+  },
+  statusPanel: {
+    display: "flex",
+    gap: "14px",
+    alignItems: "stretch",
+    flexWrap: "wrap",
+    justifyContent: "flex-end"
+  },
+  statusItem: {
+    minWidth: "130px",
+    background: COLORS.warningLight,
+    color: "#8A6200",
+    border: "1px solid #F5D36B",
+    borderRadius: "22px",
+    padding: "16px 18px",
+    display: "grid",
+    gap: "6px",
+    textAlign: "center"
+  },
+  statusItemReady: {
+    minWidth: "130px",
+    background: COLORS.successLight,
+    color: COLORS.success,
+    border: "1px solid #BFE8CE",
+    borderRadius: "22px",
+    padding: "16px 18px",
+    display: "grid",
+    gap: "6px",
+    textAlign: "center"
   },
   clockBox: {
+    minWidth: "150px",
     background: COLORS.primaryLight,
     color: COLORS.primary,
     border: `1px solid ${COLORS.border}`,
     borderRadius: "22px",
-    padding: "18px 24px",
+    padding: "16px 18px",
     display: "grid",
     gap: "6px",
-    textAlign: "right"
+    textAlign: "center"
   },
   message: {
-    background: COLORS.primaryLight,
-    color: COLORS.primary,
-    border: `1px solid ${COLORS.border}`,
+    background: "#FFE9EC",
+    color: COLORS.danger,
+    border: `1px solid #FFC7D0`,
     borderRadius: "18px",
     padding: "14px 18px",
     fontWeight: "800",
@@ -239,7 +304,7 @@ const styles = {
   columnHeader: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: "16px",
     marginBottom: "22px"
   },
@@ -253,6 +318,11 @@ const styles = {
     color: COLORS.success,
     fontSize: "42px"
   },
+  columnSubtitle: {
+    margin: "8px 0 0",
+    color: COLORS.textSoft,
+    fontSize: "18px"
+  },
   countBadge: {
     background: COLORS.primaryLight,
     color: COLORS.primary,
@@ -262,7 +332,7 @@ const styles = {
     fontSize: "22px"
   },
   readyCountBadge: {
-    background: "#E9F8EF",
+    background: COLORS.successLight,
     color: COLORS.success,
     borderRadius: "999px",
     padding: "10px 18px",
@@ -287,7 +357,7 @@ const styles = {
     gap: "8px"
   },
   readyCard: {
-    background: "#E9F8EF",
+    background: COLORS.successLight,
     border: "2px solid #BFE8CE",
     borderRadius: "26px",
     padding: "28px",
@@ -325,7 +395,7 @@ const styles = {
     fontSize: "22px"
   },
   emptyReadyBox: {
-    background: "#E9F8EF",
+    background: COLORS.successLight,
     border: "1px dashed #BFE8CE",
     borderRadius: "24px",
     padding: "36px",

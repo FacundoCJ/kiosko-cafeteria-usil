@@ -43,8 +43,17 @@ export const isAuthenticated = () => {
   return Boolean(getToken());
 };
 
-export const logout = () => {
+export const clearSession = () => {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+};
+
+export const logout = () => {
+  clearSession();
+  window.location.href = "/login";
+};
+
+export const switchAccount = () => {
+  clearSession();
   window.location.href = "/login";
 };
