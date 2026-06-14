@@ -6,70 +6,120 @@ export const orderStatus = {
   PREPARING: "preparando",
   READY: "listo",
   DELIVERED: "entregado",
-  CANCELLED: "cancelado"
+  CANCELLED: "anulado"
 };
 
-const generateOrderNumber = async () => {
-  const totalOrders = await prisma.order.count();
-  const nextNumber = totalOrders + 1;
-  return `KIO-${String(nextNumber).padStart(4, "0")}`;
+const ORDER_STATUSES = Object.values(orderStatus);
+
+const formatDecimal = (value) => {
+  return Number(value);
 };
 
 const formatOrder = (order) => {
   return {
-    id: order.id,
-    orderNumber: order.orderNumber,
-    customerName: order.customerName,
-    items: order.items.map((item) => ({
-      productId: item.productId,
-      name: item.name,
-      category: item.category,
-      unitPrice: Number(item.unitPrice),
-      quantity: item.quantity,
-      subtotal: Number(item.subtotal)
-    })),
-    total: Number(order.total),
-    paymentMethod: order.paymentMethod,
-    status: order.status,
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt
+    ...order,
+    total: formatDecimal(order.total),
+    items: order.items?.map((item) => ({
+      ...item,
+      unitPrice: formatDecimal(item.unitPrice),
+      subtotal: formatDecimal(item.subtotal)
+    })) || [],
+    payment: order.payment
+      ? {
+          ...order.payment,
+          amount: formatDecimal(order.payment.amount)
+        }
+      : null
   };
 };
 
-const formatPublicOrder = (order) => {
+const getUserActionData = (req) => {
+  if (!req.user) {
+    return {
+      userId: null,
+      userName: "Sistema",
+      userRole: null
+    };
+  }
+
   return {
-    id: order.id,
-    orderNumber: order.orderNumber,
-    status: order.status,
-    total: Number(order.total),
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt
+    userId: req.user.id,
+    userName: req.user.name,
+    userRole: req.user.role
   };
 };
 
-const formatTicketOrder = (order) => {
+const registerOrderAction = async ({
+  tx,
+  orderId,
+  req,
+  action,
+  previousStatus = null,
+  newStatus = null,
+  reason = null
+}) => {
+  const userData = getUserActionData(req);
+
+  return tx.orderAction.create({
+    data: {
+      orderId,
+      userId: userData.userId,
+      userName: userData.userName,
+      userRole: userData.userRole,
+      action,
+      previousStatus,
+      newStatus,
+      reason
+    }
+  });
+};
+
+const buildDateFilter = (date) => {
+  if (!date) {
+    return {};
+  }
+
+  const isValidDate = /^\d{4}-\d{2}-\d{2}$/.test(date);
+
+  if (!isValidDate) {
+    return {};
+  }
+
+  const startDate = new Date(`${date}T00:00:00.000-05:00`);
+  const endDate = new Date(`${date}T23:59:59.999-05:00`);
+
   return {
-    id: order.id,
-    orderNumber: order.orderNumber,
-    customerName: order.customerName,
-    items: order.items.map((item) => ({
-      name: item.name,
-      category: item.category,
-      unitPrice: Number(item.unitPrice),
-      quantity: item.quantity,
-      subtotal: Number(item.subtotal)
-    })),
-    total: Number(order.total),
-    paymentMethod: order.paymentMethod,
-    status: order.status,
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt
+    createdAt: {
+      gte: startDate,
+      lte: endDate
+    }
   };
+};
+
+const generateOrderNumber = async (tx) => {
+  const totalOrders = await tx.order.count();
+  let nextNumber = totalOrders + 1;
+  let orderNumber = `KIO-${String(nextNumber).padStart(4, "0")}`;
+
+  let existingOrder = await tx.order.findUnique({
+    where: { orderNumber }
+  });
+
+  while (existingOrder) {
+    nextNumber += 1;
+    orderNumber = `KIO-${String(nextNumber).padStart(4, "0")}`;
+
+    existingOrder = await tx.order.findUnique({
+      where: { orderNumber }
+    });
+  }
+
+  return orderNumber;
 };
 
 export const createOrder = async (req, res) => {
   try {
-    const { customerName, items, paymentMethod } = req.body;
+    const { customerName, items } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -78,135 +128,145 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    const orderItems = [];
-    let total = 0;
+    const order = await prisma.$transaction(async (tx) => {
+      const orderItemsData = [];
+      let total = 0;
 
-    for (const item of items) {
-      const productId = Number(item.productId);
-      const quantity = Number(item.quantity);
+      for (const item of items) {
+        const productId = Number(item.productId);
+        const quantity = Number(item.quantity);
 
-      if (!quantity || quantity <= 0) {
-        return res.status(400).json({
-          ok: false,
-          message: "La cantidad debe ser mayor a 0"
-        });
-      }
-
-      const product = await prisma.product.findUnique({
-        where: {
-          id: productId
-        },
-        include: {
-          category: true
+        if (!productId || !quantity || quantity <= 0) {
+          throw new Error("Producto o cantidad inválida");
         }
-      });
 
-      if (!product || !product.isActive) {
-        return res.status(404).json({
-          ok: false,
-          message: `Producto con ID ${item.productId} no encontrado`
+        const product = await tx.product.findUnique({
+          where: { id: productId },
+          include: {
+            category: true
+          }
         });
-      }
 
-      if (product.stock < quantity) {
-        return res.status(400).json({
-          ok: false,
-          message: `Stock insuficiente para ${product.name}`
+        if (!product || !product.isActive) {
+          throw new Error(`Producto no disponible: ${productId}`);
+        }
+
+        if (product.stock < quantity) {
+          throw new Error(`Stock insuficiente para ${product.name}`);
+        }
+
+        const unitPrice = Number(product.price);
+        const subtotal = unitPrice * quantity;
+
+        total += subtotal;
+
+        orderItemsData.push({
+          productId: product.id,
+          name: product.name,
+          category: product.category.name,
+          unitPrice,
+          quantity,
+          subtotal
         });
-      }
 
-      const unitPrice = Number(product.price);
-      const subtotal = unitPrice * quantity;
-
-      orderItems.push({
-        productId: product.id,
-        name: product.name,
-        category: product.category.name,
-        unitPrice,
-        quantity,
-        subtotal
-      });
-
-      total += subtotal;
-    }
-
-    const orderNumber = await generateOrderNumber();
-
-    const newOrder = await prisma.$transaction(async (tx) => {
-      for (const item of orderItems) {
         await tx.product.update({
-          where: {
-            id: item.productId
-          },
+          where: { id: product.id },
           data: {
-            stock: {
-              decrement: item.quantity
-            }
+            stock: product.stock - quantity
           }
         });
       }
 
-      return tx.order.create({
+      const orderNumber = await generateOrderNumber(tx);
+
+      const createdOrder = await tx.order.create({
         data: {
           orderNumber,
-          customerName: customerName || "Cliente kiosko",
-          total: Number(total.toFixed(2)),
-          paymentMethod: paymentMethod || "pendiente",
-          status: orderStatus.PENDING,
+          customerName: customerName?.trim() || "Cliente kiosko",
+          total,
+          paymentMethod: "pendiente",
+          status: "pendiente",
           items: {
-            create: orderItems.map((item) => ({
-              productId: item.productId,
-              name: item.name,
-              category: item.category,
-              unitPrice: item.unitPrice,
-              quantity: item.quantity,
-              subtotal: Number(item.subtotal.toFixed(2))
-            }))
+            create: orderItemsData
           }
         },
         include: {
-          items: true
+          items: true,
+          payment: true
         }
       });
+
+      await registerOrderAction({
+        tx,
+        orderId: createdOrder.id,
+        req,
+        action: "PEDIDO_CREADO",
+        previousStatus: null,
+        newStatus: "pendiente",
+        reason: "Pedido generado desde el kiosko"
+      });
+
+      return createdOrder;
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       ok: true,
       message: "Pedido creado correctamente",
-      order: formatOrder(newOrder)
+      order: formatOrder(order)
     });
   } catch (error) {
-    console.error("Error creando pedido:", error);
+    console.error("ERROR REAL CREANDO PEDIDO:", error);
 
-    res.status(500).json({
+    return res.status(400).json({
       ok: false,
-      message: "Error interno al crear pedido"
+      message: error.message || "Error al crear pedido"
     });
   }
 };
 
 export const getOrders = async (req, res) => {
   try {
+    const { date, status } = req.query;
+
+    const where = {
+      ...buildDateFilter(date)
+    };
+
+    if (status && ORDER_STATUSES.includes(status)) {
+      where.status = status;
+    }
+
     const orders = await prisma.order.findMany({
+      where,
       include: {
-        items: true
+        items: true,
+        payment: true,
+        actions: {
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 5
+        }
       },
       orderBy: {
         createdAt: "desc"
       }
     });
 
-    res.json({
+    return res.json({
       ok: true,
-      total: orders.length,
+      filters: {
+        date: date || null,
+        status: status || null
+      },
       orders: orders.map(formatOrder)
     });
   } catch (error) {
-    console.error("Error obteniendo pedidos:", error);
+    console.error("ERROR REAL LISTANDO PEDIDOS:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
-      message: "Error interno al obtener pedidos"
+      message: "Error al listar pedidos"
     });
   }
 };
@@ -215,12 +275,23 @@ export const getOrderById = async (req, res) => {
   try {
     const orderId = Number(req.params.id);
 
+    if (!orderId) {
+      return res.status(400).json({
+        ok: false,
+        message: "ID de pedido inválido"
+      });
+    }
+
     const order = await prisma.order.findUnique({
-      where: {
-        id: orderId
-      },
+      where: { id: orderId },
       include: {
-        items: true
+        items: true,
+        payment: true,
+        actions: {
+          orderBy: {
+            createdAt: "desc"
+          }
+        }
       }
     });
 
@@ -231,16 +302,16 @@ export const getOrderById = async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       ok: true,
       order: formatOrder(order)
     });
   } catch (error) {
-    console.error("Error obteniendo pedido:", error);
+    console.error("ERROR REAL OBTENIENDO PEDIDO:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
-      message: "Error interno al obtener pedido"
+      message: "Error al obtener pedido"
     });
   }
 };
@@ -248,54 +319,221 @@ export const getOrderById = async (req, res) => {
 export const updateOrderStatus = async (req, res) => {
   try {
     const orderId = Number(req.params.id);
-    const { status } = req.body;
+    const { status, reason } = req.body;
 
-    const allowedStatus = Object.values(orderStatus);
-
-    if (!allowedStatus.includes(status)) {
+    if (!orderId) {
       return res.status(400).json({
         ok: false,
-        message: "Estado de pedido no válido",
-        allowedStatus
+        message: "ID de pedido inválido"
       });
     }
 
-    const existingOrder = await prisma.order.findUnique({
-      where: {
-        id: orderId
+    if (!ORDER_STATUSES.includes(status)) {
+      return res.status(400).json({
+        ok: false,
+        message: "Estado de pedido inválido"
+      });
+    }
+
+    if (status === "anulado") {
+      return res.status(400).json({
+        ok: false,
+        message: "Para anular un pedido usa la ruta específica de anulación"
+      });
+    }
+
+    const order = await prisma.$transaction(async (tx) => {
+      const currentOrder = await tx.order.findUnique({
+        where: { id: orderId },
+        include: {
+          items: true,
+          payment: true
+        }
+      });
+
+      if (!currentOrder) {
+        throw new Error("Pedido no encontrado");
       }
+
+      if (currentOrder.status === "anulado") {
+        throw new Error("No se puede cambiar el estado de un pedido anulado");
+      }
+
+      if (currentOrder.status === "entregado") {
+        throw new Error("No se puede cambiar el estado de un pedido entregado");
+      }
+
+      const previousStatus = currentOrder.status;
+
+      const updatedOrder = await tx.order.update({
+        where: { id: orderId },
+        data: { status },
+        include: {
+          items: true,
+          payment: true
+        }
+      });
+
+      await registerOrderAction({
+        tx,
+        orderId,
+        req,
+        action: "CAMBIO_ESTADO",
+        previousStatus,
+        newStatus: status,
+        reason: reason?.trim() || null
+      });
+
+      return updatedOrder;
     });
 
-    if (!existingOrder) {
+    return res.json({
+      ok: true,
+      message: "Estado del pedido actualizado correctamente",
+      order: formatOrder(order)
+    });
+  } catch (error) {
+    console.error("ERROR REAL ACTUALIZANDO ESTADO:", error);
+
+    return res.status(400).json({
+      ok: false,
+      message: error.message || "Error al actualizar estado"
+    });
+  }
+};
+
+export const cancelOrder = async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+    const { reason } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({
+        ok: false,
+        message: "ID de pedido inválido"
+      });
+    }
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({
+        ok: false,
+        message: "El motivo de anulación es obligatorio"
+      });
+    }
+
+    const order = await prisma.$transaction(async (tx) => {
+      const currentOrder = await tx.order.findUnique({
+        where: { id: orderId },
+        include: {
+          items: true,
+          payment: true
+        }
+      });
+
+      if (!currentOrder) {
+        throw new Error("Pedido no encontrado");
+      }
+
+      if (currentOrder.status === "anulado") {
+        throw new Error("El pedido ya está anulado");
+      }
+
+      if (currentOrder.status === "entregado") {
+        throw new Error("No se puede anular un pedido entregado");
+      }
+
+      const previousStatus = currentOrder.status;
+
+      for (const item of currentOrder.items) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: {
+            stock: {
+              increment: item.quantity
+            }
+          }
+        });
+      }
+
+      const updatedOrder = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: "anulado"
+        },
+        include: {
+          items: true,
+          payment: true
+        }
+      });
+
+      await registerOrderAction({
+        tx,
+        orderId,
+        req,
+        action: "PEDIDO_ANULADO",
+        previousStatus,
+        newStatus: "anulado",
+        reason: reason.trim()
+      });
+
+      return updatedOrder;
+    });
+
+    return res.json({
+      ok: true,
+      message: "Pedido anulado correctamente",
+      order: formatOrder(order)
+    });
+  } catch (error) {
+    console.error("ERROR REAL ANULANDO PEDIDO:", error);
+
+    return res.status(400).json({
+      ok: false,
+      message: error.message || "Error al anular pedido"
+    });
+  }
+};
+
+export const getOrderActions = async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+
+    if (!orderId) {
+      return res.status(400).json({
+        ok: false,
+        message: "ID de pedido inválido"
+      });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId }
+    });
+
+    if (!order) {
       return res.status(404).json({
         ok: false,
         message: "Pedido no encontrado"
       });
     }
 
-    const updatedOrder = await prisma.order.update({
-      where: {
-        id: orderId
-      },
-      data: {
-        status
-      },
-      include: {
-        items: true
+    const actions = await prisma.orderAction.findMany({
+      where: { orderId },
+      orderBy: {
+        createdAt: "desc"
       }
     });
 
-    res.json({
+    return res.json({
       ok: true,
-      message: "Estado del pedido actualizado correctamente",
-      order: formatOrder(updatedOrder)
+      orderNumber: order.orderNumber,
+      actions
     });
   } catch (error) {
-    console.error("Error actualizando pedido:", error);
+    console.error("ERROR REAL LISTANDO HISTORIAL:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
-      message: "Error interno al actualizar pedido"
+      message: "Error al listar historial del pedido"
     });
   }
 };
@@ -305,34 +543,32 @@ export const getPublicOrderStatus = async (req, res) => {
     const orders = await prisma.order.findMany({
       where: {
         status: {
-          in: [orderStatus.PAID, orderStatus.PREPARING, orderStatus.READY]
+          in: ["pagado", "preparando", "listo"]
         }
       },
-      orderBy: {
-        updatedAt: "desc"
+      select: {
+        id: true,
+        orderNumber: true,
+        customerName: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true
       },
-      take: 30
+      orderBy: {
+        createdAt: "asc"
+      }
     });
 
-    const preparingOrders = orders.filter((order) =>
-      [orderStatus.PAID, orderStatus.PREPARING].includes(order.status)
-    );
-
-    const readyOrders = orders.filter((order) => order.status === orderStatus.READY);
-
-    res.json({
+    return res.json({
       ok: true,
-      preparing: preparingOrders.map(formatPublicOrder),
-      ready: readyOrders.map(formatPublicOrder),
-      totalPreparing: preparingOrders.length,
-      totalReady: readyOrders.length
+      orders
     });
   } catch (error) {
-    console.error("Error obteniendo estado público de pedidos:", error);
+    console.error("ERROR REAL EN PANTALLA PUBLICA:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
-      message: "Error interno al obtener estado público de pedidos"
+      message: "Error al obtener estado público de pedidos"
     });
   }
 };
@@ -341,39 +577,31 @@ export const getPublicTicketByOrderNumber = async (req, res) => {
   try {
     const { orderNumber } = req.params;
 
-    if (!orderNumber) {
-      return res.status(400).json({
-        ok: false,
-        message: "El número de pedido es obligatorio"
-      });
-    }
-
     const order = await prisma.order.findUnique({
-      where: {
-        orderNumber: orderNumber.trim().toUpperCase()
-      },
+      where: { orderNumber },
       include: {
-        items: true
+        items: true,
+        payment: true
       }
     });
 
     if (!order) {
       return res.status(404).json({
         ok: false,
-        message: "No se encontró un pedido con ese número"
+        message: "Ticket no encontrado"
       });
     }
 
-    res.json({
+    return res.json({
       ok: true,
-      ticket: formatTicketOrder(order)
+      ticket: formatOrder(order)
     });
   } catch (error) {
-    console.error("Error obteniendo ticket público:", error);
+    console.error("ERROR REAL OBTENIENDO TICKET:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
-      message: "Error interno al obtener ticket"
+      message: "Error al obtener ticket"
     });
   }
 };
