@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import ProductManagement from "./pages/ProductManagement.jsx";
+import Login from "./pages/Login.jsx";
+import { getCurrentUser, isAuthenticated, logout } from "./services/auth.service.js";
 
 const API_URL = "/api";
 
@@ -24,11 +26,30 @@ const COLORS = {
 function Root() {
   const currentPath = window.location.pathname;
 
+  if (currentPath.startsWith("/login")) {
+    if (isAuthenticated()) {
+      window.location.href = "/admin";
+      return null;
+    }
+
+    return <Login />;
+  }
+
   if (currentPath.startsWith("/admin/productos")) {
+    if (!isAuthenticated()) {
+      window.location.href = "/login";
+      return null;
+    }
+
     return <ProductManagement />;
   }
 
   if (currentPath.startsWith("/admin")) {
+    if (!isAuthenticated()) {
+      window.location.href = "/login";
+      return null;
+    }
+
     return <AdminPanel />;
   }
 
@@ -674,6 +695,10 @@ function AdminPanel() {
 
   <button style={adminStyles.refreshButton} onClick={loadOrders}>
     {loading ? "Cargando..." : "Actualizar"}
+  </button>
+
+  <button style={adminStyles.logoutButton} onClick={logout}>
+    Cerrar sesión
   </button>
 </div>
       </header>
@@ -1384,6 +1409,16 @@ const adminStyles = {
     fontWeight: "800",
     fontSize: "16px"
   },
+  logoutButton: {
+  background: "#D72638",
+  color: "#FFFFFF",
+  border: "none",
+  borderRadius: "999px",
+  padding: "14px 24px",
+  fontWeight: "800",
+  fontSize: "16px",
+  cursor: "pointer"
+},
   refreshButton: {
     background: COLORS.primary,
     color: COLORS.white,

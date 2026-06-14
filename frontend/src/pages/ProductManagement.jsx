@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { logout } from "../services/auth.service.js";
 
 const API_URL = "/api";
 
@@ -294,19 +295,23 @@ export default function ProductManagement() {
           </p>
         </div>
 
-        <div style={styles.headerActions}>
-          <a href="/admin" style={styles.secondaryButton}>
-            Panel pedidos
-          </a>
+       <div style={styles.headerActions}>
+  <a href="/admin" style={styles.secondaryButton}>
+    Panel pedidos
+  </a>
 
-          <a href="/" style={styles.secondaryButton}>
-            Ir al kiosko
-          </a>
+  <a href="/" style={styles.secondaryButton}>
+    Ir al kiosko
+  </a>
 
-          <button style={styles.primaryButton} onClick={loadProducts}>
-            {loading ? "Cargando..." : "Actualizar"}
-          </button>
-        </div>
+  <button style={styles.primaryButton} onClick={loadProducts}>
+    {loading ? "Cargando..." : "Actualizar"}
+  </button>
+
+  <button style={styles.logoutButton} onClick={logout}>
+    Cerrar sesión
+  </button>
+</div>
       </header>
 
       <section style={styles.metrics}>
@@ -626,6 +631,16 @@ function getProductEmoji(image) {
 }
 
 const styles = {
+    logoutButton: {
+  background: COLORS.danger,
+  color: COLORS.white,
+  border: "none",
+  borderRadius: "999px",
+  padding: "14px 24px",
+  fontWeight: "800",
+  fontSize: "16px",
+  cursor: "pointer"
+},
   page: {
     minHeight: "100vh",
     background: COLORS.background,
