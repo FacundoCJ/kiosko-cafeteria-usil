@@ -222,7 +222,7 @@ export default function UserManagement() {
         </div>
 
         <div style={styles.headerActions}>
-          <a href="/admin" style={styles.secondaryButton}>
+          <a href="/admin/pedidos" style={styles.secondaryButton}>
             Panel pedidos
           </a>
 

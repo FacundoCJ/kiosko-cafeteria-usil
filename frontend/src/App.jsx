@@ -35,6 +35,13 @@ function Root() {
   const currentPath = window.location.pathname;
   const currentUser = getCurrentUser();
 
+  const getDefaultPanelByRole = (role) => {
+    if (role === "ADMIN") return "/admin";
+    if (role === "CAFETERIA") return "/admin/pedidos";
+    if (role === "COCINA") return "/admin/pedidos";
+    return "/";
+  };
+
   const protectRoute = (Component, allowedRoles) => {
     if (!isAuthenticated()) {
       window.location.href = "/login";
@@ -42,7 +49,12 @@ function Root() {
     }
 
     if (!currentUser || !allowedRoles.includes(currentUser.role)) {
-      return <Unauthorized />;
+      return (
+        <Unauthorized
+          suggestedPath={getDefaultPanelByRole(currentUser?.role)}
+          suggestedLabel="Ir a mi panel"
+        />
+      );
     }
 
     return <Component />;
@@ -54,7 +66,7 @@ function Root() {
 
   if (currentPath.startsWith("/login")) {
     if (isAuthenticated()) {
-      window.location.href = "/admin";
+      window.location.href = getDefaultPanelByRole(currentUser?.role);
       return null;
     }
 
@@ -73,8 +85,12 @@ function Root() {
     return protectRoute(ProductManagement, ["ADMIN", "CAFETERIA"]);
   }
 
-  if (currentPath.startsWith("/admin")) {
+  if (currentPath.startsWith("/admin/pedidos")) {
     return protectRoute(AdminPanel, ["ADMIN", "CAFETERIA", "COCINA"]);
+  }
+
+  if (currentPath === "/admin" || currentPath === "/admin/") {
+    return protectRoute(AdminPanel, ["ADMIN"]);
   }
 
   return <KioskApp />;

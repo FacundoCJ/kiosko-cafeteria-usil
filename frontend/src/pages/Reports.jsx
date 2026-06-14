@@ -132,7 +132,7 @@ const canManageProducts = ["ADMIN", "CAFETERIA"].includes(currentUser?.role);
         </div>
 
         <div style={styles.headerActions}>
-  <a href="/admin" style={styles.secondaryButton}>
+  <a href="/admin/pedidos" style={styles.secondaryButton}>
     Panel pedidos
   </a>
 

@@ -46,7 +46,15 @@ export default function Login() {
       }
 
       saveSession(data.token, data.user);
-      window.location.href = "/admin";
+      if (data.user.role === "ADMIN") {
+  window.location.href = "/admin";
+} else if (data.user.role === "CAFETERIA") {
+  window.location.href = "/admin/pedidos";
+} else if (data.user.role === "COCINA") {
+  window.location.href = "/admin/pedidos";
+} else {
+  window.location.href = "/";
+}
     } catch (error) {
       console.error(error);
       setMessage(error.message || "Error al iniciar sesión.");

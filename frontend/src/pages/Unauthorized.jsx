@@ -12,7 +12,10 @@ const COLORS = {
   danger: "#D72638"
 };
 
-export default function Unauthorized() {
+export default function Unauthorized({
+  suggestedPath = "/",
+  suggestedLabel = "Continuar"
+}) {
   const user = getCurrentUser();
 
   return (
@@ -23,7 +26,8 @@ export default function Unauthorized() {
         <h1 style={styles.title}>Acceso no autorizado</h1>
 
         <p style={styles.subtitle}>
-          No tienes permisos para ingresar a esta sección del sistema.
+          Tu usuario inició sesión correctamente, pero tu rol no tiene permisos
+          para ingresar a esta sección.
         </p>
 
         <div style={styles.infoBox}>
@@ -34,12 +38,16 @@ export default function Unauthorized() {
         </div>
 
         <div style={styles.actions}>
-          <a href="/admin" style={styles.primaryButton}>
-            Volver al panel
+          <a href={suggestedPath} style={styles.primaryButton}>
+            {suggestedLabel}
+          </a>
+
+          <a href="/login" style={styles.secondaryButton}>
+            Iniciar sesión con otra cuenta
           </a>
 
           <a href="/" style={styles.secondaryButton}>
-            Ir al kiosko
+            Ir al kiosko público
           </a>
 
           <button style={styles.logoutButton} onClick={logout}>
@@ -64,7 +72,7 @@ const styles = {
   },
   card: {
     width: "100%",
-    maxWidth: "620px",
+    maxWidth: "660px",
     background: COLORS.white,
     borderRadius: "32px",
     border: `1px solid ${COLORS.border}`,
