@@ -25,16 +25,25 @@ export const login = async (req, res) => {
       });
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     const user = await prisma.user.findUnique({
       where: {
-        email: email.trim().toLowerCase()
+        email: normalizedEmail
       }
     });
 
-    if (!user || !user.isActive) {
+    if (!user) {
       return res.status(401).json({
         ok: false,
         message: "Credenciales inválidas"
+      });
+    }
+
+    if (!user.isActive) {
+      return res.status(401).json({
+        ok: false,
+        message: "Usuario inactivo"
       });
     }
 
@@ -49,18 +58,19 @@ export const login = async (req, res) => {
 
     const token = generateToken(user);
 
-    res.json({
+    return res.json({
       ok: true,
       message: "Inicio de sesión correcto",
       token,
       user: formatUser(user)
     });
   } catch (error) {
-    console.error("Error iniciando sesión:", error);
+    console.error("ERROR REAL EN LOGIN:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
-      message: "Error interno al iniciar sesión"
+      message: "Error interno al iniciar sesión",
+      error: error.message
     });
   }
 };
@@ -80,16 +90,17 @@ export const getProfile = async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       ok: true,
       user: formatUser(user)
     });
   } catch (error) {
-    console.error("Error obteniendo perfil:", error);
+    console.error("ERROR REAL EN PERFIL:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
-      message: "Error interno al obtener perfil"
+      message: "Error interno al obtener perfil",
+      error: error.message
     });
   }
 };

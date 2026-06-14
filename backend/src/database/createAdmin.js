@@ -10,21 +10,17 @@ const createAdmin = async () => {
     const password = "Admin123";
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const existingAdmin = await prisma.user.findUnique({
+    const admin = await prisma.user.upsert({
       where: {
         email
-      }
-    });
-
-    if (existingAdmin) {
-      console.log("El usuario administrador ya existe:");
-      console.log(`Correo: ${email}`);
-      console.log("Contraseña: Admin123");
-      return;
-    }
-
-    const admin = await prisma.user.create({
-      data: {
+      },
+      update: {
+        name: "Administrador USIL",
+        password: hashedPassword,
+        role: "ADMIN",
+        isActive: true
+      },
+      create: {
         name: "Administrador USIL",
         email,
         password: hashedPassword,
@@ -33,14 +29,15 @@ const createAdmin = async () => {
       }
     });
 
-    console.log("Usuario administrador creado correctamente:");
+    console.log("Usuario administrador listo:");
     console.log(`ID: ${admin.id}`);
     console.log(`Nombre: ${admin.name}`);
     console.log(`Correo: ${email}`);
     console.log("Contraseña: Admin123");
     console.log(`Rol: ${admin.role}`);
+    console.log(`Activo: ${admin.isActive}`);
   } catch (error) {
-    console.error("Error creando administrador:", error);
+    console.error("Error creando o actualizando administrador:", error);
   } finally {
     await prisma.$disconnect();
   }

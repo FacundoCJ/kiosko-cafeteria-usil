@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import Reports from "./pages/Reports.jsx";
 import { createRoot } from "react-dom/client";
 import ProductManagement from "./pages/ProductManagement.jsx";
 import Login from "./pages/Login.jsx";
@@ -34,6 +35,15 @@ function Root() {
     }
 
     return <Login />;
+  }
+
+  if (currentPath.startsWith("/admin/reportes")) {
+    if (!isAuthenticated()) {
+      window.location.href = "/login";
+      return null;
+    }
+
+    return <Reports />;
   }
 
   if (currentPath.startsWith("/admin/productos")) {
@@ -475,22 +485,26 @@ function AdminPanel() {
         </div>
 
         <div style={adminStyles.headerActions}>
-          <a href="/admin/productos" style={adminStyles.linkButton}>
-            Gestionar productos
-          </a>
+  <a href="/admin/reportes" style={adminStyles.linkButton}>
+    Reportes
+  </a>
 
-          <a href="/" style={adminStyles.linkButton}>
-            Ir al kiosko
-          </a>
+  <a href="/admin/productos" style={adminStyles.linkButton}>
+    Gestionar productos
+  </a>
 
-          <button style={adminStyles.refreshButton} onClick={loadOrders}>
-            {loading ? "Cargando..." : "Actualizar"}
-          </button>
+  <a href="/" style={adminStyles.linkButton}>
+    Ir al kiosko
+  </a>
 
-          <button style={adminStyles.logoutButton} onClick={logout}>
-            Cerrar sesión
-          </button>
-        </div>
+  <button style={adminStyles.refreshButton} onClick={loadOrders}>
+    {loading ? "Cargando..." : "Actualizar"}
+  </button>
+
+  <button style={adminStyles.logoutButton} onClick={logout}>
+    Cerrar sesión
+  </button>
+</div>
       </header>
 
       <section style={adminStyles.metrics}>

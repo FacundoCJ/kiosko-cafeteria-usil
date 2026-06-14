@@ -296,22 +296,26 @@ export default function ProductManagement() {
         </div>
 
         <div style={styles.headerActions}>
-          <a href="/admin" style={styles.secondaryButton}>
-            Panel pedidos
-          </a>
+  <a href="/admin" style={styles.secondaryButton}>
+    Panel pedidos
+  </a>
 
-          <a href="/" style={styles.secondaryButton}>
-            Ir al kiosko
-          </a>
+  <a href="/admin/reportes" style={styles.secondaryButton}>
+    Reportes
+  </a>
 
-          <button style={styles.primaryButton} onClick={loadProducts}>
-            {loading ? "Cargando..." : "Actualizar"}
-          </button>
+  <a href="/" style={styles.secondaryButton}>
+    Ir al kiosko
+  </a>
 
-          <button style={styles.logoutButton} onClick={logout}>
-            Cerrar sesión
-          </button>
-        </div>
+  <button style={styles.primaryButton} onClick={loadProducts}>
+    {loading ? "Cargando..." : "Actualizar"}
+  </button>
+
+  <button style={styles.logoutButton} onClick={logout}>
+    Cerrar sesión
+  </button>
+</div>
       </header>
 
       <section style={styles.metrics}>
