@@ -1,135 +1,187 @@
 import { prisma } from "../config/prisma.js";
 
-const formatCurrency = (value) => {
-  return Number(Number(value || 0).toFixed(2));
+const VALID_SALE_STATUSES = ["pagado", "preparando", "listo", "entregado"];
+
+const ORDER_STATUSES = [
+  "pendiente",
+  "pagado",
+  "preparando",
+  "listo",
+  "entregado",
+  "anulado"
+];
+
+const formatDecimal = (value) => {
+  return Number(value || 0);
 };
 
-const getDateRange = (req) => {
-  const { from, to } = req.query;
+const getTodayDate = () => {
+  const now = new Date();
+  const peruDate = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+  return peruDate.toISOString().slice(0, 10);
+};
 
-  const where = {};
+const isValidDateFormat = (date) => {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date);
+};
 
-  if (from || to) {
-    where.createdAt = {};
+const buildDateRange = (date) => {
+  const selectedDate = date && isValidDateFormat(date) ? date : getTodayDate();
 
-    if (from) {
-      where.createdAt.gte = new Date(`${from}T00:00:00.000Z`);
-    }
+  const startDate = new Date(`${selectedDate}T00:00:00.000-05:00`);
+  const endDate = new Date(`${selectedDate}T23:59:59.999-05:00`);
 
-    if (to) {
-      where.createdAt.lte = new Date(`${to}T23:59:59.999Z`);
+  return {
+    selectedDate,
+    startDate,
+    endDate
+  };
+};
+
+const getOrdersByStatus = (orders) => {
+  const result = {};
+
+  for (const status of ORDER_STATUSES) {
+    result[status] = 0;
+  }
+
+  for (const order of orders) {
+    result[order.status] = (result[order.status] || 0) + 1;
+  }
+
+  return result;
+};
+
+const getSalesByPaymentMethod = (orders) => {
+  const result = {};
+
+  for (const order of orders) {
+    const method = order.paymentMethod || "pendiente";
+
+    result[method] = (result[method] || 0) + formatDecimal(order.total);
+  }
+
+  return result;
+};
+
+const getProductsSoldSummary = (orders) => {
+  const productMap = new Map();
+
+  for (const order of orders) {
+    for (const item of order.items || []) {
+      const current = productMap.get(item.productId) || {
+        productId: item.productId,
+        name: item.name,
+        category: item.category,
+        quantity: 0,
+        total: 0
+      };
+
+      current.quantity += Number(item.quantity || 0);
+      current.total += formatDecimal(item.subtotal);
+
+      productMap.set(item.productId, current);
     }
   }
 
-  return where;
+  return Array.from(productMap.values()).sort((a, b) => b.quantity - a.quantity);
+};
+
+const formatOrder = (order) => {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    customerName: order.customerName,
+    status: order.status,
+    paymentMethod: order.paymentMethod,
+    total: formatDecimal(order.total),
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+    items: (order.items || []).map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      name: item.name,
+      category: item.category,
+      unitPrice: formatDecimal(item.unitPrice),
+      quantity: item.quantity,
+      subtotal: formatDecimal(item.subtotal)
+    }))
+  };
 };
 
 export const getSummaryReport = async (req, res) => {
   try {
-    const dateFilter = getDateRange(req);
-
     const orders = await prisma.order.findMany({
-      where: dateFilter,
       include: {
         items: true,
         payment: true
-      },
-      orderBy: {
-        createdAt: "desc"
       }
     });
 
-    const payments = await prisma.payment.findMany({
-      where: dateFilter,
-      orderBy: {
-        createdAt: "desc"
-      }
-    });
+    const products = await prisma.product.findMany();
 
-    const products = await prisma.product.findMany({
-      include: {
-        category: true
-      }
-    });
-
-    const paidOrders = orders.filter((order) =>
-      ["pagado", "preparando", "listo", "entregado"].includes(order.status)
+    const validSalesOrders = orders.filter((order) =>
+      VALID_SALE_STATUSES.includes(order.status)
     );
 
-    const deliveredOrders = orders.filter((order) => order.status === "entregado");
-    const pendingOrders = orders.filter((order) =>
-      ["pagado", "preparando", "listo"].includes(order.status)
+    const totalSales = validSalesOrders.reduce(
+      (sum, order) => sum + formatDecimal(order.total),
+      0
     );
 
-    const totalSales = paidOrders.reduce((sum, order) => {
-      return sum + Number(order.total);
-    }, 0);
-
-    const totalProductsSold = paidOrders.reduce((sum, order) => {
+    const totalProductsSold = validSalesOrders.reduce((sum, order) => {
       return (
         sum +
-        order.items.reduce((itemsSum, item) => {
-          return itemsSum + item.quantity;
-        }, 0)
+        (order.items || []).reduce(
+          (itemSum, item) => itemSum + Number(item.quantity || 0),
+          0
+        )
       );
     }, 0);
 
-    const averageTicket =
-      paidOrders.length > 0 ? totalSales / paidOrders.length : 0;
+    const lowStockProducts = products.filter(
+      (product) => product.stock <= 5 && product.isActive
+    ).length;
 
-    const lowStockProducts = products.filter((product) => product.stock <= 5);
-
-    const salesByPaymentMethod = payments.reduce((acc, payment) => {
-      const method = payment.paymentMethod || "sin método";
-      acc[method] = formatCurrency((acc[method] || 0) + Number(payment.amount));
-      return acc;
-    }, {});
-
-    const ordersByStatus = orders.reduce((acc, order) => {
-      acc[order.status] = (acc[order.status] || 0) + 1;
-      return acc;
-    }, {});
-
-    const activeProducts = products.filter((product) => product.isActive);
-    const inactiveProducts = products.filter((product) => !product.isActive);
-
-    res.json({
+    return res.json({
       ok: true,
       summary: {
         totalOrders: orders.length,
-        paidOrders: paidOrders.length,
-        deliveredOrders: deliveredOrders.length,
-        pendingOrders: pendingOrders.length,
-        totalSales: formatCurrency(totalSales),
-        averageTicket: formatCurrency(averageTicket),
+        paidOrders: validSalesOrders.length,
+        deliveredOrders: orders.filter((order) => order.status === "entregado")
+          .length,
+        pendingOrders: orders.filter((order) => order.status === "pendiente")
+          .length,
+        cancelledOrders: orders.filter((order) => order.status === "anulado")
+          .length,
+        totalSales,
+        averageTicket:
+          validSalesOrders.length > 0 ? totalSales / validSalesOrders.length : 0,
         totalProductsSold,
         totalProducts: products.length,
-        activeProducts: activeProducts.length,
-        inactiveProducts: inactiveProducts.length,
-        lowStockProducts: lowStockProducts.length,
-        salesByPaymentMethod,
-        ordersByStatus
+        activeProducts: products.filter((product) => product.isActive).length,
+        inactiveProducts: products.filter((product) => !product.isActive).length,
+        lowStockProducts,
+        salesByPaymentMethod: getSalesByPaymentMethod(validSalesOrders),
+        ordersByStatus: getOrdersByStatus(orders)
       }
     });
   } catch (error) {
-    console.error("Error generando reporte resumen:", error);
+    console.error("ERROR REAL EN REPORTE RESUMEN:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
-      message: "Error interno al generar reporte resumen"
+      message: "Error al generar reporte resumen"
     });
   }
 };
 
 export const getTopProductsReport = async (req, res) => {
   try {
-    const dateFilter = getDateRange(req);
-
     const orders = await prisma.order.findMany({
       where: {
-        ...dateFilter,
         status: {
-          in: ["pagado", "preparando", "listo", "entregado"]
+          in: VALID_SALE_STATUSES
         }
       },
       include: {
@@ -137,97 +189,153 @@ export const getTopProductsReport = async (req, res) => {
       }
     });
 
-    const productMap = new Map();
+    const topProducts = getProductsSoldSummary(orders).slice(0, 10);
 
-    orders.forEach((order) => {
-      order.items.forEach((item) => {
-        const current = productMap.get(item.productId) || {
-          productId: item.productId,
-          name: item.name,
-          category: item.category,
-          quantitySold: 0,
-          totalSales: 0
-        };
-
-        current.quantitySold += item.quantity;
-        current.totalSales += Number(item.subtotal);
-
-        productMap.set(item.productId, current);
-      });
-    });
-
-    const topProducts = Array.from(productMap.values())
-      .map((product) => ({
-        ...product,
-        totalSales: formatCurrency(product.totalSales)
-      }))
-      .sort((a, b) => {
-        if (b.quantitySold === a.quantitySold) {
-          return b.totalSales - a.totalSales;
-        }
-
-        return b.quantitySold - a.quantitySold;
-      });
-
-    res.json({
+    return res.json({
       ok: true,
-      total: topProducts.length,
-      products: topProducts
+      topProducts
     });
   } catch (error) {
-    console.error("Error generando reporte de productos:", error);
+    console.error("ERROR REAL EN REPORTE TOP PRODUCTOS:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
-      message: "Error interno al generar reporte de productos"
+      message: "Error al generar reporte de productos más vendidos"
     });
   }
 };
 
 export const getSalesByDayReport = async (req, res) => {
   try {
-    const dateFilter = getDateRange(req);
-
-    const payments = await prisma.payment.findMany({
-      where: dateFilter,
+    const orders = await prisma.order.findMany({
+      where: {
+        status: {
+          in: VALID_SALE_STATUSES
+        }
+      },
+      include: {
+        items: true
+      },
       orderBy: {
         createdAt: "asc"
       }
     });
 
-    const salesMap = new Map();
+    const dayMap = new Map();
 
-    payments.forEach((payment) => {
-      const day = payment.createdAt.toISOString().slice(0, 10);
+    for (const order of orders) {
+      const dateKey = new Date(order.createdAt).toISOString().slice(0, 10);
 
-      const current = salesMap.get(day) || {
-        date: day,
+      const current = dayMap.get(dateKey) || {
+        date: dateKey,
+        totalOrders: 0,
         totalSales: 0,
-        payments: 0
+        totalProductsSold: 0
       };
 
-      current.totalSales += Number(payment.amount);
-      current.payments += 1;
+      current.totalOrders += 1;
+      current.totalSales += formatDecimal(order.total);
+      current.totalProductsSold += (order.items || []).reduce(
+        (sum, item) => sum + Number(item.quantity || 0),
+        0
+      );
 
-      salesMap.set(day, current);
-    });
+      dayMap.set(dateKey, current);
+    }
 
-    const salesByDay = Array.from(salesMap.values()).map((day) => ({
-      ...day,
-      totalSales: formatCurrency(day.totalSales)
-    }));
-
-    res.json({
+    return res.json({
       ok: true,
-      total: salesByDay.length,
-      salesByDay
+      salesByDay: Array.from(dayMap.values())
     });
   } catch (error) {
-    console.error("Error generando reporte de ventas por día:", error);
+    console.error("ERROR REAL EN REPORTE VENTAS POR DIA:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
-      message: "Error interno al generar reporte de ventas por día"
+      message: "Error al generar reporte de ventas por día"
+    });
+  }
+};
+
+export const getDailyCloseReport = async (req, res) => {
+  try {
+    const { date } = req.query;
+    const { selectedDate, startDate, endDate } = buildDateRange(date);
+
+    const orders = await prisma.order.findMany({
+      where: {
+        createdAt: {
+          gte: startDate,
+          lte: endDate
+        }
+      },
+      include: {
+        items: true,
+        payment: true
+      },
+      orderBy: {
+        createdAt: "asc"
+      }
+    });
+
+    const validSalesOrders = orders.filter((order) =>
+      VALID_SALE_STATUSES.includes(order.status)
+    );
+
+    const cancelledOrders = orders.filter((order) => order.status === "anulado");
+
+    const totalSales = validSalesOrders.reduce(
+      (sum, order) => sum + formatDecimal(order.total),
+      0
+    );
+
+    const totalProductsSold = validSalesOrders.reduce((sum, order) => {
+      return (
+        sum +
+        (order.items || []).reduce(
+          (itemSum, item) => itemSum + Number(item.quantity || 0),
+          0
+        )
+      );
+    }, 0);
+
+    const productsSold = getProductsSoldSummary(validSalesOrders);
+    const ordersByStatus = getOrdersByStatus(orders);
+    const salesByPaymentMethod = getSalesByPaymentMethod(validSalesOrders);
+
+    return res.json({
+      ok: true,
+      dailyClose: {
+        date: selectedDate,
+        generatedAt: new Date(),
+        totals: {
+          totalOrders: orders.length,
+          validSalesOrders: validSalesOrders.length,
+          cancelledOrders: cancelledOrders.length,
+          pendingOrders: ordersByStatus.pendiente || 0,
+          paidOrders: ordersByStatus.pagado || 0,
+          preparingOrders: ordersByStatus.preparando || 0,
+          readyOrders: ordersByStatus.listo || 0,
+          deliveredOrders: ordersByStatus.entregado || 0,
+          totalSales,
+          averageTicket:
+            validSalesOrders.length > 0
+              ? totalSales / validSalesOrders.length
+              : 0,
+          totalProductsSold
+        },
+        ordersByStatus,
+        salesByPaymentMethod,
+        productsSold,
+        orders: orders.map(formatOrder)
+      }
+    });
+  } catch (error) {
+    console.error("ERROR REAL EN CIERRE DE DIA:", error);
+
+    return res.status(500).json({
+      ok: false,
+      message: "Error al generar cierre de día"
     });
   }
 };

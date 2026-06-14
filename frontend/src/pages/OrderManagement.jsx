@@ -111,6 +111,18 @@ const formatAction = (action) => {
   return actions[action] || action;
 };
 
+const formatPaymentMethod = (method) => {
+  const methods = {
+    pendiente: "Pendiente",
+    yape: "Yape",
+    plin: "Plin",
+    tarjeta: "Tarjeta",
+    qr: "QR"
+  };
+
+  return methods[method] || method || "Pendiente";
+};
+
 const getStatusStyle = (status) => {
   const info = STATUS_INFO[status] || STATUS_INFO.pendiente;
 
@@ -152,6 +164,25 @@ const escapeCsv = (value) => {
   return `"${text}"`;
 };
 
+const downloadCsv = (filename, rows) => {
+  const csvContent = rows
+    .map((row) => row.map(escapeCsv).join(","))
+    .join("\n");
+
+  const blob = new Blob([csvContent], {
+    type: "text/csv;charset=utf-8;"
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  link.click();
+
+  URL.revokeObjectURL(url);
+};
+
 function OrderManagement() {
   const currentUser = getCurrentUser();
 
@@ -162,6 +193,8 @@ function OrderManagement() {
   const [loading, setLoading] = useState(false);
   const [historyModal, setHistoryModal] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [dailyCloseModal, setDailyCloseModal] = useState(null);
+  const [dailyCloseLoading, setDailyCloseLoading] = useState(false);
 
   const isKitchenUser = currentUser?.role === "COCINA";
   const canManageUsers = currentUser?.role === "ADMIN";
@@ -362,6 +395,35 @@ function OrderManagement() {
     }
   };
 
+  const openDailyClose = async () => {
+    try {
+      setDailyCloseLoading(true);
+      setMessage("");
+
+      const dateParam = selectedDate || getTodayInputValue();
+
+      const response = await fetch(
+        `${API_URL}/reports/daily-close?date=${dateParam}`,
+        {
+          headers: getAuthHeaders()
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "No se pudo generar el cierre de día");
+      }
+
+      setDailyCloseModal(data.dailyClose);
+    } catch (error) {
+      console.error(error);
+      setMessage(error.message || "Error al generar cierre de día.");
+    } finally {
+      setDailyCloseLoading(false);
+    }
+  };
+
   const exportOrdersCsv = () => {
     if (visibleOrders.length === 0) {
       setMessage("No hay pedidos para exportar.");
@@ -382,7 +444,7 @@ function OrderManagement() {
       order.orderNumber,
       order.customerName,
       formatStatus(order.status),
-      order.paymentMethod,
+      formatPaymentMethod(order.paymentMethod),
       Number(order.total || 0).toFixed(2),
       formatDateTime(order.createdAt),
       (order.items || [])
@@ -390,22 +452,7 @@ function OrderManagement() {
         .join(" | ")
     ]);
 
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map(escapeCsv).join(","))
-      .join("\n");
-
-    const blob = new Blob([csvContent], {
-      type: "text/csv;charset=utf-8;"
-    });
-
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-
-    link.href = url;
-    link.download = `pedidos-${selectedDate || "todos"}.csv`;
-    link.click();
-
-    URL.revokeObjectURL(url);
+    downloadCsv(`pedidos-${selectedDate || "todos"}.csv`, [headers, ...rows]);
     setMessage("Reporte CSV exportado correctamente.");
   };
 
@@ -520,6 +567,16 @@ function OrderManagement() {
             Hoy
           </button>
 
+          {canViewReports && (
+            <button
+              style={styles.dailyCloseButton}
+              onClick={openDailyClose}
+              disabled={dailyCloseLoading}
+            >
+              {dailyCloseLoading ? "Generando..." : "Cierre de día"}
+            </button>
+          )}
+
           <button style={styles.exportButton} onClick={exportOrdersCsv}>
             Exportar CSV
           </button>
@@ -579,6 +636,13 @@ function OrderManagement() {
           onClose={() => setHistoryModal(null)}
         />
       )}
+
+      {dailyCloseModal && (
+        <DailyCloseModal
+          dailyClose={dailyCloseModal}
+          onClose={() => setDailyCloseModal(null)}
+        />
+      )}
     </main>
   );
 }
@@ -627,7 +691,9 @@ function OrderColumn({
                 ))}
               </ul>
 
-              <p style={styles.paymentText}>Pago: {order.paymentMethod}</p>
+              <p style={styles.paymentText}>
+                Pago: {formatPaymentMethod(order.paymentMethod)}
+              </p>
 
               <div style={styles.orderActions}>
                 {nextStatus && (
@@ -720,6 +786,212 @@ function HistoryModal({ order, actions, loading, onClose }) {
             ))}
           </div>
         )}
+      </section>
+    </div>
+  );
+}
+
+function DailyCloseModal({ dailyClose, onClose }) {
+  const totals = dailyClose.totals || {};
+  const ordersByStatus = dailyClose.ordersByStatus || {};
+  const salesByPaymentMethod = dailyClose.salesByPaymentMethod || {};
+  const productsSold = dailyClose.productsSold || [];
+  const orders = dailyClose.orders || [];
+
+  const exportDailyCloseCsv = () => {
+    const rows = [
+      ["CIERRE DE DIA"],
+      ["Fecha", dailyClose.date],
+      ["Generado", formatDateTime(dailyClose.generatedAt)],
+      [],
+      ["RESUMEN"],
+      ["Total pedidos", totals.totalOrders || 0],
+      ["Pedidos validos para venta", totals.validSalesOrders || 0],
+      ["Pedidos anulados", totals.cancelledOrders || 0],
+      ["Ventas validas", Number(totals.totalSales || 0).toFixed(2)],
+      ["Ticket promedio", Number(totals.averageTicket || 0).toFixed(2)],
+      ["Productos vendidos", totals.totalProductsSold || 0],
+      [],
+      ["PEDIDOS POR ESTADO"],
+      ["Pendiente", ordersByStatus.pendiente || 0],
+      ["Pagado", ordersByStatus.pagado || 0],
+      ["En preparacion", ordersByStatus.preparando || 0],
+      ["Listo", ordersByStatus.listo || 0],
+      ["Entregado", ordersByStatus.entregado || 0],
+      ["Anulado", ordersByStatus.anulado || 0],
+      [],
+      ["VENTAS POR METODO"],
+      ...Object.entries(salesByPaymentMethod).map(([method, total]) => [
+        formatPaymentMethod(method),
+        Number(total || 0).toFixed(2)
+      ]),
+      [],
+      ["PRODUCTOS VENDIDOS"],
+      ["Producto", "Categoria", "Cantidad", "Total"],
+      ...productsSold.map((product) => [
+        product.name,
+        product.category,
+        product.quantity,
+        Number(product.total || 0).toFixed(2)
+      ]),
+      [],
+      ["DETALLE DE PEDIDOS"],
+      ["Pedido", "Cliente", "Estado", "Metodo", "Total", "Fecha"],
+      ...orders.map((order) => [
+        order.orderNumber,
+        order.customerName,
+        formatStatus(order.status),
+        formatPaymentMethod(order.paymentMethod),
+        Number(order.total || 0).toFixed(2),
+        formatDateTime(order.createdAt)
+      ])
+    ];
+
+    downloadCsv(`cierre-dia-${dailyClose.date}.csv`, rows);
+  };
+
+  return (
+    <div style={styles.modalOverlay}>
+      <section style={styles.dailyCloseModal}>
+        <div style={styles.modalHeader}>
+          <div>
+            <h2 style={styles.modalTitle}>Cierre de día</h2>
+            <p style={styles.modalSubtitle}>
+              Fecha: {dailyClose.date} · Generado:{" "}
+              {formatDateTime(dailyClose.generatedAt)}
+            </p>
+          </div>
+
+          <button style={styles.closeButton} onClick={onClose}>
+            ×
+          </button>
+        </div>
+
+        <section style={styles.dailyCloseGrid}>
+          <article style={styles.dailyMetric}>
+            <span>Total pedidos</span>
+            <strong>{totals.totalOrders || 0}</strong>
+          </article>
+
+          <article style={styles.dailyMetric}>
+            <span>Ventas válidas</span>
+            <strong>{formatCurrency(totals.totalSales)}</strong>
+          </article>
+
+          <article style={styles.dailyMetric}>
+            <span>Ticket promedio</span>
+            <strong>{formatCurrency(totals.averageTicket)}</strong>
+          </article>
+
+          <article style={styles.dailyMetric}>
+            <span>Productos vendidos</span>
+            <strong>{totals.totalProductsSold || 0}</strong>
+          </article>
+
+          <article style={styles.dailyMetric}>
+            <span>Anulados</span>
+            <strong>{totals.cancelledOrders || 0}</strong>
+          </article>
+
+          <article style={styles.dailyMetric}>
+            <span>Entregados</span>
+            <strong>{totals.deliveredOrders || 0}</strong>
+          </article>
+        </section>
+
+        <section style={styles.dailySection}>
+          <h3 style={styles.dailyTitle}>Pedidos por estado</h3>
+
+          <div style={styles.statusSummaryGrid}>
+            {Object.entries(STATUS_INFO).map(([status, info]) => (
+              <div key={status} style={styles.statusSummaryItem}>
+                <span>{info.label}</span>
+                <strong>{ordersByStatus[status] || 0}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section style={styles.dailySection}>
+          <h3 style={styles.dailyTitle}>Ventas por método de pago</h3>
+
+          {Object.keys(salesByPaymentMethod).length === 0 ? (
+            <p style={styles.emptyColumn}>Sin ventas válidas registradas.</p>
+          ) : (
+            <div style={styles.paymentSummary}>
+              {Object.entries(salesByPaymentMethod).map(([method, total]) => (
+                <div key={method} style={styles.paymentRow}>
+                  <span>{formatPaymentMethod(method)}</span>
+                  <strong>{formatCurrency(total)}</strong>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section style={styles.dailySection}>
+          <h3 style={styles.dailyTitle}>Productos vendidos</h3>
+
+          {productsSold.length === 0 ? (
+            <p style={styles.emptyColumn}>Sin productos vendidos.</p>
+          ) : (
+            <div style={styles.productsTable}>
+              {productsSold.map((product) => (
+                <div key={product.productId} style={styles.productRow}>
+                  <div>
+                    <strong>{product.name}</strong>
+                    <span>{product.category}</span>
+                  </div>
+
+                  <div style={styles.productNumbers}>
+                    <strong>{product.quantity} und.</strong>
+                    <span>{formatCurrency(product.total)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section style={styles.dailySection}>
+          <h3 style={styles.dailyTitle}>Detalle de pedidos</h3>
+
+          {orders.length === 0 ? (
+            <p style={styles.emptyColumn}>No hubo pedidos en este día.</p>
+          ) : (
+            <div style={styles.dailyOrdersList}>
+              {orders.map((order) => (
+                <article key={order.id} style={styles.dailyOrderItem}>
+                  <div>
+                    <strong>{order.orderNumber}</strong>
+                    <span>{order.customerName}</span>
+                  </div>
+
+                  <div>
+                    <span style={getStatusStyle(order.status)}>
+                      {formatStatus(order.status)}
+                    </span>
+                  </div>
+
+                  <div style={styles.productNumbers}>
+                    <strong>{formatCurrency(order.total)}</strong>
+                    <span>{formatPaymentMethod(order.paymentMethod)}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <div style={styles.dailyActions}>
+          <button style={styles.exportButton} onClick={exportDailyCloseCsv}>
+            Exportar cierre CSV
+          </button>
+
+          <button style={styles.secondaryButton} onClick={() => window.print()}>
+            Imprimir
+          </button>
+        </div>
       </section>
     </div>
   );
@@ -859,6 +1131,15 @@ const styles = {
   exportButton: {
     background: COLORS.success,
     color: COLORS.white,
+    border: "none",
+    borderRadius: "14px",
+    padding: "13px 18px",
+    fontWeight: "900",
+    cursor: "pointer"
+  },
+  dailyCloseButton: {
+    background: COLORS.warning,
+    color: COLORS.primary,
     border: "none",
     borderRadius: "14px",
     padding: "13px 18px",
@@ -1017,6 +1298,15 @@ const styles = {
     padding: "24px",
     boxShadow: "0 28px 90px rgba(0,0,0,0.24)"
   },
+  dailyCloseModal: {
+    width: "min(980px, 100%)",
+    maxHeight: "88vh",
+    overflow: "auto",
+    background: COLORS.white,
+    borderRadius: "28px",
+    padding: "24px",
+    boxShadow: "0 28px 90px rgba(0,0,0,0.24)"
+  },
   modalHeader: {
     display: "flex",
     justifyContent: "space-between",
@@ -1087,6 +1377,99 @@ const styles = {
     padding: "10px",
     color: COLORS.primary,
     fontWeight: "800"
+  },
+  dailyCloseGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: "14px",
+    marginBottom: "18px"
+  },
+  dailyMetric: {
+    background: COLORS.background,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: "18px",
+    padding: "16px",
+    display: "grid",
+    gap: "6px"
+  },
+  dailySection: {
+    borderTop: `1px solid ${COLORS.border}`,
+    paddingTop: "18px",
+    marginTop: "18px"
+  },
+  dailyTitle: {
+    margin: "0 0 12px",
+    color: COLORS.primary,
+    fontSize: "22px"
+  },
+  statusSummaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: "12px"
+  },
+  statusSummaryItem: {
+    background: COLORS.background,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: "16px",
+    padding: "14px",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "12px",
+    fontWeight: "900"
+  },
+  paymentSummary: {
+    display: "grid",
+    gap: "10px"
+  },
+  paymentRow: {
+    background: COLORS.background,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: "16px",
+    padding: "14px",
+    display: "flex",
+    justifyContent: "space-between",
+    fontWeight: "900"
+  },
+  productsTable: {
+    display: "grid",
+    gap: "10px"
+  },
+  productRow: {
+    background: COLORS.background,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: "16px",
+    padding: "14px",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "18px",
+    alignItems: "center"
+  },
+  productNumbers: {
+    display: "grid",
+    gap: "4px",
+    textAlign: "right",
+    color: COLORS.primary
+  },
+  dailyOrdersList: {
+    display: "grid",
+    gap: "10px"
+  },
+  dailyOrderItem: {
+    background: COLORS.background,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: "16px",
+    padding: "14px",
+    display: "grid",
+    gridTemplateColumns: "1fr auto auto",
+    gap: "14px",
+    alignItems: "center"
+  },
+  dailyActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "12px",
+    marginTop: "20px",
+    flexWrap: "wrap"
   }
 };
 

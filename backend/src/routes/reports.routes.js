@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  getDailyCloseReport,
   getSalesByDayReport,
   getSummaryReport,
   getTopProductsReport
@@ -30,6 +31,13 @@ router.get(
   authenticate,
   authorizeRoles("ADMIN", "CAFETERIA"),
   getSalesByDayReport
+);
+
+router.get(
+  "/daily-close",
+  authenticate,
+  authorizeRoles("ADMIN", "CAFETERIA"),
+  getDailyCloseReport
 );
 
 export default router;
