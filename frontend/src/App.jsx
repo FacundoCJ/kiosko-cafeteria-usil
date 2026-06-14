@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import ProductManagement from "./pages/ProductManagement.jsx";
 
 const API_URL = "/api";
 
@@ -22,6 +23,10 @@ const COLORS = {
 
 function Root() {
   const currentPath = window.location.pathname;
+
+  if (currentPath.startsWith("/admin/productos")) {
+    return <ProductManagement />;
+  }
 
   if (currentPath.startsWith("/admin")) {
     return <AdminPanel />;
@@ -659,14 +664,18 @@ function AdminPanel() {
         </div>
 
         <div style={adminStyles.headerActions}>
-          <a href="/" style={adminStyles.linkButton}>
-            Ir al kiosko
-          </a>
+  <a href="/admin/productos" style={adminStyles.linkButton}>
+    Gestionar productos
+  </a>
 
-          <button style={adminStyles.refreshButton} onClick={loadOrders}>
-            {loading ? "Cargando..." : "Actualizar"}
-          </button>
-        </div>
+  <a href="/" style={adminStyles.linkButton}>
+    Ir al kiosko
+  </a>
+
+  <button style={adminStyles.refreshButton} onClick={loadOrders}>
+    {loading ? "Cargando..." : "Actualizar"}
+  </button>
+</div>
       </header>
 
       <section style={adminStyles.metrics}>
