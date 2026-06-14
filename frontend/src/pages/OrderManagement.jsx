@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import logoUsil from "../assets/branding/logo-usil.png";
+import * as XLSX from "xlsx";
 
 import {
   getAuthHeaders,
@@ -181,6 +182,159 @@ const downloadCsv = (filename, rows) => {
   link.click();
 
   URL.revokeObjectURL(url);
+};
+
+const createWorksheet = (rows, columnWidths = []) => {
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+
+  worksheet["!cols"] = columnWidths.map((width) => ({
+    wch: width
+  }));
+
+  return worksheet;
+};
+
+const exportDailyCloseExcelFile = (dailyClose) => {
+  const totals = dailyClose.totals || {};
+  const ordersByStatus = dailyClose.ordersByStatus || {};
+  const salesByPaymentMethod = dailyClose.salesByPaymentMethod || {};
+  const productsSold = dailyClose.productsSold || [];
+  const orders = dailyClose.orders || [];
+
+  const workbook = XLSX.utils.book_new();
+
+  const resumenRows = [
+    ["KIOSKO CAFETERÍA USIL"],
+    ["CIERRE DE DÍA"],
+    [],
+    ["Fecha de operación", dailyClose.date],
+    ["Fecha de generación", formatDateTime(dailyClose.generatedAt)],
+    [],
+    ["Indicador", "Valor"],
+    ["Total de pedidos", totals.totalOrders || 0],
+    ["Pedidos válidos para venta", totals.validSalesOrders || 0],
+    ["Pedidos anulados", totals.cancelledOrders || 0],
+    ["Pedidos entregados", totals.deliveredOrders || 0],
+    ["Ventas válidas", Number(totals.totalSales || 0)],
+    ["Ticket promedio", Number(totals.averageTicket || 0)],
+    ["Productos vendidos", totals.totalProductsSold || 0],
+    [],
+    ["Validación automática"],
+    ["Total calculado de ventas", { f: "SUM(DetallePedidos!E2:E500)" }],
+    ["Total pedidos en detalle", { f: "COUNTA(DetallePedidos!A2:A500)" }]
+  ];
+
+  const resumenSheet = createWorksheet(resumenRows, [30, 24]);
+  resumenSheet["B12"].z = '"S/ "#,##0.00';
+  resumenSheet["B13"].z = '"S/ "#,##0.00';
+  resumenSheet["B17"].z = '"S/ "#,##0.00';
+
+  XLSX.utils.book_append_sheet(workbook, resumenSheet, "Resumen");
+
+  const estadoRows = [
+    ["Estado", "Cantidad"],
+    ["Pendiente", ordersByStatus.pendiente || 0],
+    ["Pagado", ordersByStatus.pagado || 0],
+    ["En preparación", ordersByStatus.preparando || 0],
+    ["Listo", ordersByStatus.listo || 0],
+    ["Entregado", ordersByStatus.entregado || 0],
+    ["Anulado", ordersByStatus.anulado || 0],
+    ["Total", { f: "SUM(B2:B7)" }]
+  ];
+
+  const estadoSheet = createWorksheet(estadoRows, [24, 16]);
+  XLSX.utils.book_append_sheet(workbook, estadoSheet, "Pedidos por estado");
+
+  const metodosRows = [
+    ["Método de pago", "Total vendido"],
+    ...Object.entries(salesByPaymentMethod).map(([method, total]) => [
+      formatPaymentMethod(method),
+      Number(total || 0)
+    ]),
+    [],
+    ["Total", { f: "SUM(B2:B100)" }]
+  ];
+
+  const metodosSheet = createWorksheet(metodosRows, [24, 18]);
+
+  for (let rowIndex = 2; rowIndex <= 100; rowIndex += 1) {
+    const cell = metodosSheet[`B${rowIndex}`];
+
+    if (cell) {
+      cell.z = '"S/ "#,##0.00';
+    }
+  }
+
+  XLSX.utils.book_append_sheet(workbook, metodosSheet, "Métodos de pago");
+
+  const productosRows = [
+    ["Producto", "Categoría", "Cantidad vendida", "Total"],
+    ...productsSold.map((product) => [
+      product.name,
+      product.category,
+      Number(product.quantity || 0),
+      Number(product.total || 0)
+    ]),
+    [],
+    ["TOTAL", "", { f: "SUM(C2:C500)" }, { f: "SUM(D2:D500)" }]
+  ];
+
+  const productosSheet = createWorksheet(productosRows, [32, 24, 18, 18]);
+
+  for (let rowIndex = 2; rowIndex <= 500; rowIndex += 1) {
+    const cell = productosSheet[`D${rowIndex}`];
+
+    if (cell) {
+      cell.z = '"S/ "#,##0.00';
+    }
+  }
+
+  XLSX.utils.book_append_sheet(workbook, productosSheet, "Productos vendidos");
+
+  const detalleRows = [
+    [
+      "Pedido",
+      "Cliente",
+      "Estado",
+      "Método de pago",
+      "Total",
+      "Fecha",
+      "Productos"
+    ],
+    ...orders.map((order) => [
+      order.orderNumber,
+      order.customerName,
+      formatStatus(order.status),
+      formatPaymentMethod(order.paymentMethod),
+      Number(order.status === "anulado" ? 0 : order.total || 0),
+      formatDateTime(order.createdAt),
+      (order.items || [])
+        .map((item) => `${item.quantity}x ${item.name}`)
+        .join(" | ")
+    ])
+  ];
+
+  const detalleSheet = createWorksheet(detalleRows, [
+    16,
+    28,
+    18,
+    18,
+    14,
+    24,
+    48
+  ]);
+
+  for (let rowIndex = 2; rowIndex <= 500; rowIndex += 1) {
+    const cell = detalleSheet[`E${rowIndex}`];
+
+    if (cell) {
+      cell.z = '"S/ "#,##0.00';
+    }
+  }
+
+  XLSX.utils.book_append_sheet(workbook, detalleSheet, "DetallePedidos");
+
+  XLSX.writeFile(workbook, `cierre-dia-${dailyClose.date}.xlsx`);
 };
 
 function OrderManagement() {
@@ -424,37 +578,122 @@ function OrderManagement() {
     }
   };
 
-  const exportOrdersCsv = () => {
-    if (visibleOrders.length === 0) {
-      setMessage("No hay pedidos para exportar.");
-      return;
-    }
+  const exportOrdersExcel = () => {
+  if (visibleOrders.length === 0) {
+    setMessage("No hay pedidos para exportar.");
+    return;
+  }
 
-    const headers = [
-      "Numero de pedido",
+  const workbook = XLSX.utils.book_new();
+
+  const resumenRows = [
+    ["KIOSKO CAFETERÍA USIL"],
+    ["REPORTE DE PEDIDOS FILTRADOS"],
+    [],
+    ["Fecha de operación", selectedDate || "Todos"],
+    ["Estado filtrado", selectedStatus === "todos" ? "Todos los estados" : formatStatus(selectedStatus)],
+    ["Generado", formatDateTime(new Date())],
+    [],
+    ["Indicador", "Valor"],
+    ["Pedidos mostrados", visibleOrders.length],
+    ["Pedidos activos", summary.activeOrders],
+    ["Pedidos listos", summary.readyOrders],
+    ["Pedidos anulados", summary.cancelledOrders],
+    ["Ventas válidas", Number(summary.totalSales || 0)]
+  ];
+
+  const resumenSheet = createWorksheet(resumenRows, [32, 28]);
+  resumenSheet["B13"].z = '"S/ "#,##0.00';
+
+  XLSX.utils.book_append_sheet(workbook, resumenSheet, "Resumen");
+
+  const detalleRows = [
+    [
+      "Pedido",
       "Cliente",
       "Estado",
-      "Metodo de pago",
+      "Método de pago",
       "Total",
       "Fecha",
       "Productos"
-    ];
-
-    const rows = visibleOrders.map((order) => [
+    ],
+    ...visibleOrders.map((order) => [
       order.orderNumber,
       order.customerName,
       formatStatus(order.status),
       formatPaymentMethod(order.paymentMethod),
-      Number(order.total || 0).toFixed(2),
+      Number(order.status === "anulado" ? 0 : order.total || 0),
       formatDateTime(order.createdAt),
       (order.items || [])
         .map((item) => `${item.quantity}x ${item.name}`)
         .join(" | ")
-    ]);
+    ]),
+    [],
+    [
+      "TOTAL",
+      "",
+      "",
+      "",
+      { f: "SUM(E2:E500)" },
+      "",
+      ""
+    ]
+  ];
 
-    downloadCsv(`pedidos-${selectedDate || "todos"}.csv`, [headers, ...rows]);
-    setMessage("Reporte CSV exportado correctamente.");
+  const detalleSheet = createWorksheet(detalleRows, [
+    16,
+    28,
+    18,
+    18,
+    14,
+    24,
+    52
+  ]);
+
+  for (let rowIndex = 2; rowIndex <= 500; rowIndex += 1) {
+    const cell = detalleSheet[`E${rowIndex}`];
+
+    if (cell) {
+      cell.z = '"S/ "#,##0.00';
+    }
+  }
+
+  XLSX.utils.book_append_sheet(workbook, detalleSheet, "DetallePedidos");
+
+  const estados = {
+    pendiente: 0,
+    pagado: 0,
+    preparando: 0,
+    listo: 0,
+    entregado: 0,
+    anulado: 0
   };
+
+  visibleOrders.forEach((order) => {
+    estados[order.status] = (estados[order.status] || 0) + 1;
+  });
+
+  const estadosRows = [
+    ["Estado", "Cantidad"],
+    ["Pendiente", estados.pendiente],
+    ["Pagado", estados.pagado],
+    ["En preparación", estados.preparando],
+    ["Listo", estados.listo],
+    ["Entregado", estados.entregado],
+    ["Anulado", estados.anulado],
+    ["Total", { f: "SUM(B2:B7)" }]
+  ];
+
+  const estadosSheet = createWorksheet(estadosRows, [24, 16]);
+  XLSX.utils.book_append_sheet(workbook, estadosSheet, "Pedidos por estado");
+
+  XLSX.writeFile(
+    workbook,
+    `pedidos-${selectedDate || "todos"}-${selectedStatus}.xlsx`
+  );
+
+  setMessage("Reporte Excel de pedidos exportado correctamente.");
+};
 
   const resetFilters = () => {
     setSelectedDate(getTodayInputValue());
@@ -577,9 +816,9 @@ function OrderManagement() {
             </button>
           )}
 
-          <button style={styles.exportButton} onClick={exportOrdersCsv}>
-            Exportar CSV
-          </button>
+          <button style={styles.exportButton} onClick={exportOrdersExcel}>
+  Exportar pedidos Excel
+</button>
         </div>
       </section>
 
@@ -798,57 +1037,9 @@ function DailyCloseModal({ dailyClose, onClose }) {
   const productsSold = dailyClose.productsSold || [];
   const orders = dailyClose.orders || [];
 
-  const exportDailyCloseCsv = () => {
-    const rows = [
-      ["CIERRE DE DIA"],
-      ["Fecha", dailyClose.date],
-      ["Generado", formatDateTime(dailyClose.generatedAt)],
-      [],
-      ["RESUMEN"],
-      ["Total pedidos", totals.totalOrders || 0],
-      ["Pedidos validos para venta", totals.validSalesOrders || 0],
-      ["Pedidos anulados", totals.cancelledOrders || 0],
-      ["Ventas validas", Number(totals.totalSales || 0).toFixed(2)],
-      ["Ticket promedio", Number(totals.averageTicket || 0).toFixed(2)],
-      ["Productos vendidos", totals.totalProductsSold || 0],
-      [],
-      ["PEDIDOS POR ESTADO"],
-      ["Pendiente", ordersByStatus.pendiente || 0],
-      ["Pagado", ordersByStatus.pagado || 0],
-      ["En preparacion", ordersByStatus.preparando || 0],
-      ["Listo", ordersByStatus.listo || 0],
-      ["Entregado", ordersByStatus.entregado || 0],
-      ["Anulado", ordersByStatus.anulado || 0],
-      [],
-      ["VENTAS POR METODO"],
-      ...Object.entries(salesByPaymentMethod).map(([method, total]) => [
-        formatPaymentMethod(method),
-        Number(total || 0).toFixed(2)
-      ]),
-      [],
-      ["PRODUCTOS VENDIDOS"],
-      ["Producto", "Categoria", "Cantidad", "Total"],
-      ...productsSold.map((product) => [
-        product.name,
-        product.category,
-        product.quantity,
-        Number(product.total || 0).toFixed(2)
-      ]),
-      [],
-      ["DETALLE DE PEDIDOS"],
-      ["Pedido", "Cliente", "Estado", "Metodo", "Total", "Fecha"],
-      ...orders.map((order) => [
-        order.orderNumber,
-        order.customerName,
-        formatStatus(order.status),
-        formatPaymentMethod(order.paymentMethod),
-        Number(order.total || 0).toFixed(2),
-        formatDateTime(order.createdAt)
-      ])
-    ];
-
-    downloadCsv(`cierre-dia-${dailyClose.date}.csv`, rows);
-  };
+  const exportDailyCloseExcel = () => {
+  exportDailyCloseExcelFile(dailyClose);
+};
 
   return (
     <div style={styles.modalOverlay}>
@@ -984,9 +1175,9 @@ function DailyCloseModal({ dailyClose, onClose }) {
         </section>
 
         <div style={styles.dailyActions}>
-          <button style={styles.exportButton} onClick={exportDailyCloseCsv}>
-            Exportar cierre CSV
-          </button>
+          <button style={styles.exportButton} onClick={exportDailyCloseExcel}>
+  Exportar cierre Excel
+</button>
 
           <button style={styles.secondaryButton} onClick={() => window.print()}>
             Imprimir
