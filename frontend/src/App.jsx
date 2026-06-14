@@ -19,6 +19,13 @@ import brownieImg from "./assets/productos/brownie.png";
 import aguaMineralImg from "./assets/productos/agua-mineral.png";
 import triplePolloImg from "./assets/productos/triple-pollo.png";
 
+import logoUsilImg from "./assets/branding/logo-usil.png";
+import logoUsilCuadradoImg from "./assets/branding/logo-usil-cuadrado.png";
+
+import yapeImg from "./assets/pagos/yape.png";
+import plinImg from "./assets/pagos/plin.png";
+import qrPagoImg from "./assets/pagos/qr-pago.png";
+
 import {
   getAuthHeaders,
   getCurrentUser,
@@ -39,7 +46,9 @@ const COLORS = {
   border: "#D7E1F2",
   success: "#1F9D55",
   danger: "#D72638",
-  warning: "#F4B400"
+  warning: "#F4B400",
+  yape: "#8B0AAE",
+  plin: "#00CFCB"
 };
 
 const PRODUCT_IMAGES = {
@@ -62,6 +71,33 @@ const PRODUCT_IMAGES = {
   food: triplePolloImg,
   "triple-pollo": triplePolloImg
 };
+
+const PAYMENT_METHODS = [
+  {
+    value: "yape",
+    label: "Yape",
+    description: "Pago móvil",
+    image: yapeImg
+  },
+  {
+    value: "plin",
+    label: "Plin",
+    description: "Pago móvil",
+    image: plinImg
+  },
+  {
+    value: "tarjeta",
+    label: "Tarjeta",
+    description: "Débito / crédito",
+    icon: "💳"
+  },
+  {
+    value: "qr",
+    label: "QR",
+    description: "Escaneo rápido",
+    image: qrPagoImg
+  }
+];
 
 function Root() {
   const currentPath = window.location.pathname;
@@ -138,7 +174,6 @@ function KioskApp() {
   const isVerticalMode =
     viewport.width <= 1080 || viewport.height > viewport.width;
 
-  const isCompact = viewport.width <= 620;
   const isVerySmall = viewport.width <= 480;
 
   const [screen, setScreen] = useState("welcome");
@@ -371,20 +406,15 @@ function KioskApp() {
         <section
           style={{
             ...kioskStyles.welcomeCard,
-            maxWidth: isVerticalMode ? "720px" : "820px",
+            maxWidth: isVerticalMode ? "760px" : "880px",
             padding: isVerticalMode ? "34px 28px" : "46px"
           }}
         >
-          <div
-            style={{
-              ...kioskStyles.logo,
-              width: isVerticalMode ? "108px" : "96px",
-              height: isVerticalMode ? "108px" : "96px",
-              fontSize: isVerticalMode ? "31px" : "28px"
-            }}
-          >
-            USIL
-          </div>
+          <OfficialLogo
+            size={isVerticalMode ? 124 : 116}
+            mode="square"
+            centered
+          />
 
           <h1
             style={{
@@ -521,35 +551,28 @@ function KioskApp() {
           marginBottom: isVerticalMode ? "14px" : "24px"
         }}
       >
-        <div>
-          <div
-            style={{
-              ...kioskStyles.logoSmall,
-              width: isVerticalMode ? "54px" : "64px",
-              height: isVerticalMode ? "54px" : "64px",
-              fontSize: isVerticalMode ? "16px" : "18px"
-            }}
-          >
-            USIL
+        <div style={kioskStyles.headerBrand}>
+          <OfficialLogo size={isVerticalMode ? 64 : 78} mode="square" />
+
+          <div>
+            <h1
+              style={{
+                ...kioskStyles.menuTitle,
+                fontSize: isVerticalMode ? "30px" : "42px"
+              }}
+            >
+              Catálogo de cafetería
+            </h1>
+
+            <p
+              style={{
+                ...kioskStyles.menuSubtitle,
+                fontSize: isVerticalMode ? "15px" : "18px"
+              }}
+            >
+              Selecciona tus productos y confirma tu pedido.
+            </p>
           </div>
-
-          <h1
-            style={{
-              ...kioskStyles.menuTitle,
-              fontSize: isVerticalMode ? "30px" : "42px"
-            }}
-          >
-            Catálogo de cafetería
-          </h1>
-
-          <p
-            style={{
-              ...kioskStyles.menuSubtitle,
-              fontSize: isVerticalMode ? "15px" : "18px"
-            }}
-          >
-            Selecciona tus productos y confirma tu pedido.
-          </p>
         </div>
       </header>
 
@@ -735,7 +758,9 @@ function CartBottomBar({ total, totalItems, onOpen, disabled }) {
     <section style={kioskStyles.bottomBar}>
       <div>
         <strong style={kioskStyles.bottomBarTitle}>
-          {totalItems === 0 ? "Pedido vacío" : `${totalItems} producto${totalItems === 1 ? "" : "s"}`}
+          {totalItems === 0
+            ? "Pedido vacío"
+            : `${totalItems} producto${totalItems === 1 ? "" : "s"}`}
         </strong>
         <span style={kioskStyles.bottomBarTotal}>S/ {formatCurrency(total)}</span>
       </div>
@@ -784,6 +809,10 @@ function CartPanel({
   loading,
   isVerticalMode
 }) {
+  const selectedPayment = PAYMENT_METHODS.find(
+    (method) => method.value === paymentMethod
+  );
+
   return (
     <aside
       style={{
@@ -856,20 +885,43 @@ function CartPanel({
       </div>
 
       <div style={kioskStyles.paymentBox}>
-        <label style={kioskStyles.paymentLabel}>
-          Método de pago
-          <select
-            style={kioskStyles.paymentSelect}
-            value={paymentMethod}
-            onChange={(event) => setPaymentMethod(event.target.value)}
-          >
-            <option value="yape">Yape</option>
-            <option value="plin">Plin</option>
-            <option value="tarjeta">Tarjeta</option>
-            <option value="qr">QR</option>
-          </select>
-        </label>
+        <span style={kioskStyles.paymentLabel}>Método de pago</span>
+
+        <PaymentSelector
+          paymentMethod={paymentMethod}
+          setPaymentMethod={setPaymentMethod}
+        />
       </div>
+
+      {selectedPayment && (
+        <div style={kioskStyles.selectedPaymentBox}>
+          <div style={kioskStyles.selectedPaymentLeft}>
+            {selectedPayment.image ? (
+              <img
+                src={selectedPayment.image}
+                alt={selectedPayment.label}
+                style={kioskStyles.selectedPaymentImage}
+              />
+            ) : (
+              <span style={kioskStyles.selectedPaymentIcon}>
+                {selectedPayment.icon}
+              </span>
+            )}
+
+            <div>
+              <strong>{selectedPayment.label}</strong>
+              <span>{selectedPayment.description}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {paymentMethod === "qr" && (
+        <div style={kioskStyles.qrPreviewBox}>
+          <img src={qrPagoImg} alt="QR de pago" style={kioskStyles.qrPreview} />
+          <span>Escanea el QR para simular el pago.</span>
+        </div>
+      )}
 
       <button
         style={{
@@ -894,6 +946,45 @@ function CartPanel({
         </button>
       </div>
     </aside>
+  );
+}
+
+function PaymentSelector({ paymentMethod, setPaymentMethod }) {
+  return (
+    <div style={kioskStyles.paymentOptions}>
+      {PAYMENT_METHODS.map((method) => {
+        const isActive = paymentMethod === method.value;
+
+        return (
+          <button
+            key={method.value}
+            type="button"
+            style={{
+              ...kioskStyles.paymentOption,
+              ...(isActive ? kioskStyles.paymentOptionActive : {})
+            }}
+            onClick={() => setPaymentMethod(method.value)}
+          >
+            <span style={kioskStyles.paymentLogoBox}>
+              {method.image ? (
+                <img
+                  src={method.image}
+                  alt={method.label}
+                  style={kioskStyles.paymentLogo}
+                />
+              ) : (
+                <span style={kioskStyles.paymentIcon}>{method.icon}</span>
+              )}
+            </span>
+
+            <span style={kioskStyles.paymentOptionText}>
+              <strong>{method.label}</strong>
+              <small>{method.description}</small>
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -976,14 +1067,16 @@ function AdminPanel() {
   return (
     <main style={adminStyles.page}>
       <header style={adminStyles.header}>
-        <div>
-          <div style={adminStyles.logo}>USIL</div>
+        <div style={adminStyles.headerBrand}>
+          <OfficialLogo size={78} mode="square" />
 
-          <h1 style={adminStyles.title}>Panel de cafetería</h1>
+          <div>
+            <h1 style={adminStyles.title}>Panel de cafetería</h1>
 
-          <p style={adminStyles.subtitle}>
-            Gestiona pedidos, preparación y entrega.
-          </p>
+            <p style={adminStyles.subtitle}>
+              Gestiona pedidos, preparación y entrega.
+            </p>
+          </div>
         </div>
 
         <div style={adminStyles.headerActions}>
@@ -1130,6 +1223,23 @@ function OrderColumn({ title, orders, actionLabel, onAction }) {
   );
 }
 
+function OfficialLogo({ size = 72, mode = "square", centered = false }) {
+  const image = mode === "horizontal" ? logoUsilImg : logoUsilCuadradoImg;
+
+  return (
+    <div
+      style={{
+        ...kioskStyles.officialLogoBox,
+        width: size,
+        height: size,
+        margin: centered ? "0 auto 22px" : 0
+      }}
+    >
+      <img src={image} alt="USIL" style={kioskStyles.officialLogoImage} />
+    </div>
+  );
+}
+
 function useViewportSize() {
   const [viewport, setViewport] = useState({
     width: window.innerWidth,
@@ -1272,7 +1382,7 @@ const kioskStyles = {
   },
   welcomeCard: {
     width: "100%",
-    maxWidth: "820px",
+    maxWidth: "880px",
     background: COLORS.white,
     borderRadius: "34px",
     padding: "46px",
@@ -1290,31 +1400,24 @@ const kioskStyles = {
     border: `1px solid ${COLORS.border}`,
     boxShadow: "0 24px 70px rgba(11, 46, 107, 0.16)"
   },
-  logo: {
-    width: "96px",
-    height: "96px",
-    borderRadius: "50%",
+  officialLogoBox: {
+    borderRadius: "22px",
+    overflow: "hidden",
     background: COLORS.primary,
-    color: COLORS.white,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    margin: "0 auto 20px",
-    fontSize: "28px",
-    fontWeight: "900"
+    border: `1px solid ${COLORS.border}`,
+    boxShadow: "0 10px 24px rgba(11, 46, 107, 0.13)",
+    flexShrink: 0
   },
-  logoSmall: {
-    width: "64px",
-    height: "64px",
-    borderRadius: "50%",
-    background: COLORS.primary,
-    color: COLORS.white,
+  officialLogoImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block"
+  },
+  headerBrand: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
-    fontSize: "18px",
-    fontWeight: "900",
-    marginBottom: "12px"
+    gap: "18px"
   },
   welcomeTitle: {
     margin: 0,
@@ -1700,15 +1803,105 @@ const kioskStyles = {
     marginTop: "18px"
   },
   paymentLabel: {
-    display: "grid",
-    gap: "8px",
-    fontWeight: "800"
+    display: "block",
+    fontWeight: "900",
+    color: COLORS.text,
+    marginBottom: "10px"
   },
-  paymentSelect: {
+  paymentOptions: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "10px"
+  },
+  paymentOption: {
+    background: COLORS.white,
+    color: COLORS.primary,
     border: `1px solid ${COLORS.border}`,
+    borderRadius: "18px",
+    padding: "10px",
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    cursor: "pointer",
+    textAlign: "left",
+    minHeight: "74px"
+  },
+  paymentOptionActive: {
+    border: `2px solid ${COLORS.primary}`,
+    background: COLORS.primaryLight,
+    boxShadow: "0 10px 22px rgba(11, 46, 107, 0.12)"
+  },
+  paymentLogoBox: {
+    width: "44px",
+    height: "44px",
+    borderRadius: "14px",
+    background: COLORS.white,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    flexShrink: 0
+  },
+  paymentLogo: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    display: "block"
+  },
+  paymentIcon: {
+    fontSize: "25px"
+  },
+  paymentOptionText: {
+    display: "grid",
+    gap: "2px"
+  },
+  selectedPaymentBox: {
+    marginTop: "12px",
+    background: COLORS.background,
     borderRadius: "16px",
+    padding: "12px",
+    border: `1px solid ${COLORS.border}`
+  },
+  selectedPaymentLeft: {
+    display: "flex",
+    gap: "12px",
+    alignItems: "center"
+  },
+  selectedPaymentImage: {
+    width: "48px",
+    height: "48px",
+    objectFit: "contain",
+    borderRadius: "14px",
+    background: COLORS.white
+  },
+  selectedPaymentIcon: {
+    width: "48px",
+    height: "48px",
+    borderRadius: "14px",
+    background: COLORS.white,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "26px"
+  },
+  qrPreviewBox: {
+    marginTop: "12px",
+    background: "#FFF7FF",
+    border: "1px solid #EAC6F1",
+    borderRadius: "18px",
     padding: "14px",
-    fontSize: "16px",
+    display: "grid",
+    justifyItems: "center",
+    gap: "8px",
+    color: COLORS.yape,
+    fontWeight: "900",
+    textAlign: "center"
+  },
+  qrPreview: {
+    width: "160px",
+    height: "160px",
+    objectFit: "contain",
+    borderRadius: "16px",
     background: COLORS.white
   },
   payButton: {
@@ -1799,18 +1992,10 @@ const adminStyles = {
     boxShadow: "0 12px 32px rgba(11, 46, 107, 0.08)",
     marginBottom: "24px"
   },
-  logo: {
-    width: "74px",
-    height: "74px",
-    borderRadius: "50%",
-    background: COLORS.primary,
-    color: COLORS.white,
+  headerBrand: {
     display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "22px",
-    fontWeight: "900",
-    marginBottom: "14px"
+    gap: "18px",
+    alignItems: "center"
   },
   title: {
     margin: 0,
