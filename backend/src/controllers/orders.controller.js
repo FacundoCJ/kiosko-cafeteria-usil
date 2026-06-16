@@ -559,9 +559,17 @@ export const getPublicOrderStatus = async (req, res) => {
       }
     });
 
+    const preparing = orders.filter((order) =>
+      ["pagado", "preparando"].includes(order.status)
+    );
+
+    const ready = orders.filter((order) => order.status === "listo");
+
     return res.json({
       ok: true,
-      orders
+      orders,
+      preparing,
+      ready
     });
   } catch (error) {
     console.error("ERROR REAL EN PANTALLA PUBLICA:", error);
